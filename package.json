@@ -12,7 +12,9 @@
   },
   "scripts": {
     "test": "node scripts/test-all.mjs",
-    "selftest": "node scripts/host-selftest.mjs"
+    "selftest": "node scripts/host-selftest.mjs",
+    "probe:client": "node scripts/probe-client.mjs",
+    "probe:install": "node scripts/probe-install.mjs"
   },
   "files": [
     "index.js",

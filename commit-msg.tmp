@@ -1,0 +1,29 @@
+chore: profile 用 junction 指向本仓库，开发改代码即刻生效
+
+pnpm 的 file: 依赖默认是拷贝而非链接。这在上一轮酿成实际故障：仓库里已修好
+client.js，profile 里跑的还是旧拷贝，而 pnpm 认为「Already up to date」拒绝
+刷新，于是重启后报一模一样的错——修复根本没送达。
+
+现在把 profile 里那份拷贝换成 junction：
+
+  Remove-Item -Recurse -Force <profile>/node_modules/dsh-plus-plus
+  New-Item -ItemType Junction -Path <同上> -Target D:/CODE/dsh-plus-plus
+
+字体包不会因此丢失：仓库自己有 node_modules，require.resolve 顺着 junction
+落到 D:/CODE/dsh-plus-plus/node_modules。新增 scripts/probe-install.mjs 守这
+条——它从 profile 视角解析两个字体包，再经 junction 加载 src/fonts.js 问
+assetRoot()，任何一环断了立刻报出来，而不是等到启动失败才发现。
+
+README 记下三件踩过的坑：
+
+- file: 是拷贝不是链接，改仓库后必须重建 junction（且别对 junction 跑
+  install_bundle，pnpm 会把链接替换回拷贝）
+- webServer 路由是 { kind: 'exact'|'prefix', path, handler }，不按 method
+  匹配，prefix 路由拿到的是完整 pathname
+- 两条 client 路径：__ModuleLoader__ bundle 的 factory 只收到 require；
+  styles/host/harness 这些内建只注入 evaluateClientHalf（动态半身路径），
+  在前者里引用会抛 "styles is not defined" 并导致整个 entry 启动失败。
+  Builtin inspect 把 styles 列为内建，容易误判两条路径都有。
+
+验证：npm test 17 项全绿；probe:install 从 profile 视角确认两个字体包的根
+都能解析到仓库的 node_modules。

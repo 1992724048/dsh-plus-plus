@@ -62,8 +62,41 @@ npm test
 ```
 
 15 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
-扩展名白名单），浏览器侧 6 项（bundle 解析、双语字典键一致、每条 `@import` 都指向
-磁盘上真实存在且在包根内的文件、字体栈顺序）。
+扩展名白名单），浏览器侧 8 项（bundle 解析、`apply()` 跑完、不引用 loader 未提供
+的自由变量、双语字典键一致、每条 `@import` 都指向磁盘上真实存在且在包根内的文件、
+字体栈顺序）。
+
+另有两个诊断脚本，它们不是测试，是**没有浏览器时用来复现启动故障的探针**：
+
+```bash
+npm run probe:client    # 按 loader 的方式跑一遍 factory，打印 apply() 抛什么
+npm run probe:install   # 从 profile 视角验证依赖解析（见下面的开发流程）
+```
+
+## 开发流程：profile 用 junction 指向本仓库
+
+本仓库通过 `file:` 挂进 profile，但 **pnpm 默认是拷贝，不是链接**——改完仓库，
+profile 里跑的还是旧代码；而且 `pnpm install` 会因为锁文件认为「Already up to
+date」而拒绝刷新。
+
+所以装好后把 profile 里那份拷贝换成指向仓库的 junction：
+
+```powershell
+$nm   = "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-plus-plus"
+$repo = "D:\CODE\dsh-plus-plus"
+Remove-Item -Recurse -Force -LiteralPath $nm
+New-Item -ItemType Junction -Path $nm -Target $repo
+```
+
+之后**改仓库即刻生效**，重启应用即可，不用再同步。
+
+字体包不会丢：仓库自己有 `node_modules`，junction 让 `require.resolve` 顺着
+junction 落到 `D:\CODE\dsh-plus-plus\node_modules`。`npm run probe:install` 守的
+就是这条——它从 profile 视角解析两个字体包，再加载 `src/fonts.js` 问
+`assetRoot()`，任何一环断了立刻报出来。
+
+> 别对 junction 跑 `install_bundle`：pnpm 会把链接替换回拷贝。要改依赖，先在
+> 仓库里改 `package.json` 并 `npm install`，再删掉 profile 里那份重建 junction。
 
 ## 已确认的技术约束
 
@@ -84,9 +117,17 @@ npm test
 - **`locale.register(ns, { zh, en })`** 一次登记所有语言并强制双语平衡，缺一个
   `en` 会在浏览器里注册失败；`locale.bind(ns)` 返回稳定引用，调用时读当前语言，
   切语言无需重新绑定。宿主自己的 `t` 不做插值，插值要自己 `.replace('{n}', …)`。
-- **数据可用自己的同源路由**：`webServer.register({ method, path, handler })`，
-  handler 收到 `(request, response, match)`。相比 typed Remote 绑定，这条路在
-  缺传输的合成上也能用。
+- **`webServer.register({ kind, path, handler })`** —— `kind` 是 `'exact'` 或
+  `'prefix'`，**不按 method 匹配**；handler 收到 `(req, res)`，没有 `match` 参数。
+  `prefix` 路由拿到的是**完整 pathname**，得自己剥掉路由前缀。
+- **两条 client 路径，只有 `styles` 属于其中一条。** `dsh.client` 声明的 bundle
+  走 `window.__ModuleLoader__`，factory **只收到 `require`** 一个参数；
+  而 `styles` / `host` / `harness` 这些内建只注入 `evaluateClientHalf`
+  ——**动态 client half 路径**。在 `__ModuleLoader__` bundle 里引用 `styles`
+  会抛 `styles is not defined`，导致 `apply()` 失败、整个 entry 启动不了。
+  插样式表请用 `document.createElement('style')`（参考插件 `dsh-our-free-model`
+  就是这么做的）。
+  顺带：`Builtin` inspect 会把 `styles` 列为内建，容易误以为两条路径都有。
 
 ## 下一步
 
