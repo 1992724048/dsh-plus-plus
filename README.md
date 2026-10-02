@@ -2,7 +2,9 @@
 
 DeepSeek Harness 多功能增强插件。
 
-目标领域：主题、提示词、界面功能、对话优化、能力扩展。**目前只实现了字体。**
+目标领域：主题、提示词、界面功能、对话优化、能力扩展。
+
+**已实现：字体栈、直角化。**
 
 ## 状态
 
@@ -61,13 +63,60 @@ base64 这些字体。宿主因此用一条 `prefix` 路由 `/api/dsh-plus-plus/
 npm test
 ```
 
-15 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
-扩展名白名单），浏览器侧 8 项（bundle 解析、`apply()` 跑完、不引用 loader 未提供
+20 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
+扩展名白名单），浏览器侧 11 项（bundle 解析、`apply()` 跑完、不引用 loader 未提供
 的自由变量、双语字典键一致、每条 `@import` 都指向磁盘上真实存在且在包根内的文件、
-字体栈顺序）。
+字体栈顺序、宿主字体变量被重指向、六个圆角 token 归零、扫除规则带 `!important`
+且没有全局 `corner-shape`）。
+
+## 已实现：直角化
+
+整个界面改为直角，**头像、状态点、进度环这类真正该是圆形的地方保留**。写死，
+没有开关。
+
+宿主把整个圆角体系收在六个变量里，绝大部分 CSS 读的是变量而不是硬编码长度，
+所以归零这六个就覆盖了面板、卡片、输入框、按钮、代码块、模态框：
+
+```css
+--dsw-radius-xs / sm / md / lg / xl / panel: 0px
+```
+
+另有五个由该刻度派生出来的特性级 token 一并归零，避免主题里的旧值漏过来：
+`--dsl-code-block-border-radius`、`--dsl-guide-entry-radius`、`--dsl-search-radius`、
+`--dsl-terminal-radius`、`--dsl-web-radius`。
+
+### 硬编码的那部分
+
+宿主还有 **163 处**直接写死 `px` 长度的圆角，没有任何变量能覆盖，其中包括 27 处
+`999px` 的胶囊形（标签、chip、小按钮）。这部分只能靠扫：
+
+```css
+* { border-radius: 0 !important; }
+```
+
+`!important` 是必需的：宿主规则是 class 选择器 `(0,1,0)`，通配符是 `(0,0,0)`，
+不加就输了，输赢还取决于哪张表后加载。
+
+### 怎么把圆形留下
+
+上面那条会连 37 处 `border-radius: 50%` 一起抹平——头像、状态点、复选框旋钮、
+进度环，正是你要求保留的。
+
+宿主给这些规则标了 **`corner-shape: round`**（37 条里有 33 条和 `50%` 同时出现），
+这是 CSS Shapes 的属性。于是按这个标记精确恢复：
+
+```css
+[style*="corner-shape"] { corner-shape: square !important; }
+```
+
+只对宿主显式标记为 round 的元素改写，其他一律不动。
+
+> 前提：这依赖 Chromium 的 CSS Shapes `corner-shape`。目前 Electron 44 支持；若将来
+> 不支持，退化结果是「圆形元素也变直角」——界面仍然一致，只是少了圆形。
+
+## 探针
 
 另有两个诊断脚本，它们不是测试，是**没有浏览器时用来复现启动故障的探针**：
-
 ```bash
 npm run probe:client    # 按 loader 的方式跑一遍 factory，打印 apply() 抛什么
 npm run probe:install   # 从 profile 视角验证依赖解析（见下面的开发流程）
@@ -131,4 +180,4 @@ junction 落到 `D:\CODE\dsh-plus-plus\node_modules`。`npm run probe:install` �
 
 ## 下一步
 
-按领域逐个细化需求再动手。先从**主题**开始。
+按领域逐个细化需求再动手：提示词、对话优化、能力扩展。

@@ -217,6 +217,46 @@ test('the host font variables are re-pointed at our stacks', () => {
   assert.doesNotMatch(css, /^\s*html\s*,/m, 'an `html, body` rule loses to any class selector')
 })
 
+test('all six host radius tokens are zeroed', () => {
+  const css = stylesheet(boot())
+  const declared = (name) => new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(css)?.[1]?.trim()
+  for (const token of ['xs', 'sm', 'md', 'lg', 'xl', 'panel']) {
+    assert.equal(declared(`--dsw-radius-${token}`), '0px', `--dsw-radius-${token} must be zeroed`)
+  }
+  // The derived feature tokens are reset too, so a stale theme value cannot leak.
+  for (const token of ['code-block-border-radius', 'guide-entry-radius', 'search-radius', 'terminal-radius', 'web-radius']) {
+    assert.equal(declared(`--dsl-${token}`), '0px', `--dsl-${token} must be zeroed`)
+  }
+})
+
+test('the hardcoded-length sweep wins over class rules but spares the round ones', () => {
+  const css = stylesheet(boot())
+
+  // The host hardcodes ~163 radii that no token reaches; the sweep must carry
+  // !important to beat a `(0,1,0)` class selector.
+  assert.match(css, /\*\s*\{\s*border-radius:\s*0\s*!important/, 'the sweep needs !important')
+
+  // ...and must NOT blanket-redeclare corner-shape, which would square the
+  // avatars and status dots the user asked to keep round. The host marks those
+  // with `corner-shape: round`, so the sweep targets exactly that marker.
+  assert.match(css, /\[style\*="corner-shape"\]\s*\{\s*corner-shape:\s*square\s*!important/,
+    'the marker the host uses must be the one we key on')
+
+  // No blanket rule: a `corner-shape` on :root would flatten everything the host
+  // never marked, and a `*` rule would flatten the marker we rely on.
+  assert.doesNotMatch(css, /:root\s*\{[^}]*corner-shape/, 'do not set corner-shape globally')
+  assert.doesNotMatch(css, /\*\s*\{[^}]*corner-shape/, 'do not set corner-shape on every element')
+
+  // The one legitimate `round` is the demo dot, which proves circles survive.
+  const rules = [...css.matchAll(/([^{}]+)\{[^{}]*corner-shape:\s*(\w+)[^}]*\}/g)]
+  assert.ok(rules.length > 0, 'at least one corner-shape rule must be present')
+  for (const [, selector, value] of rules) {
+    assert.match(selector, /\[style\*="corner-shape"\]|\.pp-demo__dot/,
+      `unexpected corner-shape rule on ${selector.trim()}`)
+    if (value === 'round') assert.match(selector, /\.pp-demo__dot/, 'only the demo dot may stay round')
+  }
+})
+
 // ── runner ───────────────────────────────────────────────────────────────────
 
 let failures = 0

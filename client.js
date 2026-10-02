@@ -36,6 +36,13 @@ window.__ModuleLoader__.load({
         'font.loading': '正在检测字体……',
         'font.ok': '字体就绪',
         'font.missing': '字体未就绪：{name}。宿主可能没有字体路由，检查依赖是否安装完整。',
+        'shape.title': '直角',
+        'shape.subtitle': '面板、卡片、按钮、输入框、代码块、标签全部改为直角；头像、状态点等圆形元素保留。',
+        'shape.radiusScale': '圆角刻度',
+        'shape.pills': '胶囊标签',
+        'shape.roundKept': '保留圆形',
+        'shape.on': '直角',
+        'shape.keep': '保留',
       },
       en: {
         'nav': 'Plus Plus',
@@ -47,6 +54,13 @@ window.__ModuleLoader__.load({
         'font.loading': 'Checking fonts…',
         'font.ok': 'Fonts ready',
         'font.missing': 'Font not ready: {name}. The host may have no font route — check that dependencies installed completely.',
+        'shape.title': 'Sharp corners',
+        'shape.subtitle': 'Panels, cards, buttons, inputs, code blocks and chips are all square; avatars, status dots and other genuinely round elements keep their shape.',
+        'shape.radiusScale': 'Radius scale',
+        'shape.pills': 'Pill chips',
+        'shape.roundKept': 'Kept round',
+        'shape.on': 'Square',
+        'shape.keep': 'Kept',
       },
     }
 
@@ -118,17 +132,81 @@ code, pre, kbd, samp {
 }
 `.trim()
 
+    // ── sharp corners ──────────────────────────────────────────────────────────
+    /**
+     * Flatten every corner in the shell, keeping genuinely round things round.
+     *
+     * Two layers, and both are needed because the host uses both styles:
+     *
+     *  1. The radius scale. The host owns six `--dsw-radius-*` variables and most
+     *     of its CSS reads them rather than hardcoding a length, so zeroing the
+     *     six covers panels, cards, inputs, buttons, code blocks and modals. The
+     *     five `--dsl-*-radius` tokens are derived from the scale and are reset
+     *     explicitly so a stale theme value cannot leak through.
+     *
+     *  2. The ~163 rules that hardcode a `px` length, which no variable reaches —
+     *     including the 27 `999px` pills used for chips and tags.
+     *
+     * The sweep has to win against class selectors (`(0,1,0)`), so it uses
+     * `!important`. That in turn would flatten the 37 `border-radius: 50%` rules
+     * for avatars, status dots, progress rings and checkbox knobs — which the user
+     * asked to keep round.
+     *
+     * The host marks those with `corner-shape: round` (33 of the 37 rules carry
+     * it alongside the `50%`), and that property is the CSS Shapes `corner-shape`
+     * feature. Declaring `corner-shape: square` re-squares exactly the elements
+     * that were deliberately round, leaving everything else flattened.
+     */
+    const SHARP_CSS = `
+:root {
+  --dsw-radius-xs: 0px;
+  --dsw-radius-sm: 0px;
+  --dsw-radius-md: 0px;
+  --dsw-radius-lg: 0px;
+  --dsw-radius-xl: 0px;
+  --dsw-radius-panel: 0px;
+
+  --dsl-code-block-border-radius: 0px;
+  --dsl-guide-entry-radius: 0px;
+  --dsl-search-radius: 0px;
+  --dsl-terminal-radius: 0px;
+  --dsl-web-radius: 0px;
+}
+* { border-radius: 0 !important; }
+*::-webkit-scrollbar-thumb { border-radius: 0 !important; }
+
+/* Keep what the host explicitly marked as round: avatars, status dots, the
+   checkbox knob, progress rings. */
+[style*="corner-shape"] { corner-shape: square !important; }
+`.trim()
+
     /** Settings-page styling. Scoped under `.pp-` so it cannot restyle the shell. */
     const PAGE_CSS = `
 .pp-page { display: flex; flex-direction: column; gap: 16px; padding: 4px 2px 24px; }
 .pp-title { margin: 0; font-size: 18px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.pp-title--gap { margin-top: 8px; }
 .pp-sub { margin: 0; font-size: 13px; color: var(--dsw-alias-label-secondary); }
 .pp-warn { margin: 0; font-size: 12px; color: var(--dsw-alias-state-warn-primary); }
 .pp-ok { margin: 0; font-size: 12px; color: var(--dsw-alias-state-success-primary); }
 .pp-block { display: flex; flex-direction: column; gap: 8px; }
 .pp-block__title { margin: 0; font-size: 14px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.pp-demo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pp-demo__card {
+  padding: 8px 14px; font-size: 12px; color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l1);
+}
+.pp-demo__pill {
+  padding: 4px 12px; font-size: 11px; color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l2);
+}
+.pp-demo__dot {
+  width: 12px; height: 12px; flex: none;
+  background: var(--dsw-alias-brand-primary);
+  border-radius: 50%; corner-shape: round;
+}
+.pp-demo__label { font-size: 11px; color: var(--dsw-alias-label-secondary); }
 .pp-sample {
-  margin: 0; padding: 12px 14px; border-radius: 10px;
+  margin: 0; padding: 12px 14px; border-radius: 0;
   border: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary); font-size: 13px;
   font-family: var(--pp-font-mono); white-space: pre-wrap;
@@ -144,7 +222,7 @@ code, pre, kbd, samp {
       const imports = SHEETS
         .map(entry => `@import url("${FONT_ROUTE}/${entry.family}/${entry.file}");`)
         .join('\n')
-      return `${imports}\n${STACK_CSS}\n${PAGE_CSS}`
+      return `${imports}\n${STACK_CSS}\n${SHARP_CSS}\n${PAGE_CSS}`
     }
 
     // ── registration ───────────────────────────────────────────────────────────
@@ -178,18 +256,18 @@ code, pre, kbd, samp {
         order: 40,
         label: () => t('nav'),
         locale: NS,
-      }, () => h(FontPage, { t })))
+      }, () => h(SettingsPage, { t })))
     }
 
     // ── settings page ──────────────────────────────────────────────────────────
     /**
-     * A preview of the stack, with a live readiness check.
+     * The two active features, with a live readiness check for the fonts.
      *
      * The check issues `HEAD` against one representative asset per family: a 404
      * means the host is not serving that package, which is otherwise a failure the
      * user would only notice as subtly wrong-looking glyphs.
      */
-    function FontPage({ t }) {
+    function SettingsPage({ t }) {
       const { useState, useEffect } = React
       const [missing, setMissing] = useState(undefined)
 
@@ -213,16 +291,17 @@ code, pre, kbd, samp {
       }, [])
 
       return h('div', { className: 'pp-page' }, [
-        h('h2', { key: 'title', className: 'pp-title' }, t('font.title')),
-        h('p', { key: 'sub', className: 'pp-sub' }, t('font.subtitle')),
+        // ── fonts ──
+        h('h2', { key: 'font-title', className: 'pp-title' }, t('font.title')),
+        h('p', { key: 'font-sub', className: 'pp-sub' }, t('font.subtitle')),
 
         missing === undefined
-          ? h('p', { key: 'loading', className: 'pp-sub' }, t('font.loading'))
+          ? h('p', { key: 'font-loading', className: 'pp-sub' }, t('font.loading'))
           : missing.length === 0
-            ? h('p', { key: 'ok', className: 'pp-ok' }, t('font.ok'))
-            : h('p', { key: 'warn', className: 'pp-warn' }, t('font.missing', { name: missing.join(', ') })),
+            ? h('p', { key: 'font-ok', className: 'pp-ok' }, t('font.ok'))
+            : h('p', { key: 'font-warn', className: 'pp-warn' }, t('font.missing', { name: missing.join(', ') })),
 
-        h('section', { key: 'stack', className: 'pp-block' }, [
+        h('section', { key: 'font-stack', className: 'pp-block' }, [
           h('h3', { className: 'pp-block__title' }, t('font.stack')),
           h('pre', { className: 'pp-sample' }, [
             h('div', { key: 'mono', className: 'pp-sample__row' }, [
@@ -236,6 +315,16 @@ code, pre, kbd, samp {
               '正文示例：这是一段中文，用来验证兜底字体。',
             ]),
           ]),
+        ]),
+
+        // ── sharp corners ──
+        h('h2', { key: 'shape-title', className: 'pp-title pp-title--gap' }, t('shape.title')),
+        h('p', { key: 'shape-sub', className: 'pp-sub' }, t('shape.subtitle')),
+        h('div', { key: 'shape-demo', className: 'pp-demo' }, [
+          h('div', { key: 'a', className: 'pp-demo__card' }, t('shape.radiusScale')),
+          h('div', { key: 'b', className: 'pp-demo__pill' }, t('shape.pills')),
+          h('div', { key: 'c', className: 'pp-demo__dot' }, null),
+          h('span', { key: 'd', className: 'pp-demo__label' }, `${t('shape.roundKept')} ✓`),
         ]),
       ])
     }
