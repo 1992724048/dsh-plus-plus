@@ -1,0 +1,169 @@
+/**
+ * Client-bundle smoke test.
+ *
+ * The browser half is a hand-written ModuleLoader bundle, so it has no test runner
+ * and no module graph. This parses it the way the loader does and runs `apply`
+ * against a stub client context, asserting that every registration lands and that
+ * the font stylesheet points at real, servable routes.
+ *
+ * Run: `node scripts/client-selftest.mjs`
+ */
+
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import vm from 'node:vm'
+import { fileURLToPath } from 'node:url'
+
+import { FAMILIES, assetRoot } from '../src/fonts.js'
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
+const FONT_ROUTE = '/api/dsh-plus-plus/fonts'
+
+const noop = () => {}
+const tests = []
+const test = (name, fn) => tests.push([name, fn])
+
+// ── harness ──────────────────────────────────────────────────────────────────
+
+/** Parse client.js and run its factory against a stub, collecting every effect. */
+function boot() {
+  const descriptor = {}
+  const inserted = []
+  const effects = []
+
+  const sandbox = {
+    window: { __ModuleLoader__: { load: value => Object.assign(descriptor, value) } },
+    console,
+    document: { documentElement: { lang: 'zh' } },
+    fetch: async () => ({ ok: true, status: 200 }),
+    setInterval: noop,
+    clearInterval: noop,
+  }
+  sandbox.styles = { insert: css => { inserted.push(css); return noop } }
+  vm.createContext(sandbox)
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8'), sandbox, { filename: 'client.js' })
+
+  const React = {
+    createElement: (type, props, ...children) => ({ type, props, children }),
+    useState: initial => [initial, noop],
+    useEffect: noop,
+  }
+  sandbox.React = React
+
+  const ctx = {
+    effect(fn, label) {
+      const dispose = fn()
+      effects.push(label)
+      return typeof dispose === 'function' ? dispose : noop
+    },
+    locale: {
+      register: (ns, dicts) => { inserted.push(`__locale__${ns}:${Object.keys(dicts).join(',')}`); return noop },
+      bind: () => key => key,
+    },
+    slots: {
+      inject(key, callback) { effects.push(`inject:${key}`); callback(); return noop },
+      register() { return noop },
+    },
+  }
+
+  const exports = descriptor.factory(name => {
+    if (name === 'react') return React
+    throw new Error(`unexpected require: ${name}`)
+  })
+  exports.apply(ctx)
+
+  return { descriptor, inserted, effects, exports, sandbox }
+}
+
+/** The stylesheet text the client inserted (skipping the `__locale__` markers). */
+function stylesheet(boot) {
+  return boot.inserted.filter(entry => !entry.startsWith('__locale__')).join('\n')
+}
+
+// ── tests ────────────────────────────────────────────────────────────────────
+
+test('the bundle parses and registers as dsh-plus-plus', () => {
+  const { descriptor, exports } = boot()
+  assert.equal(descriptor.id, 'dsh-plus-plus')
+  assert.equal(typeof exports.apply, 'function')
+  // The bundle array comes from another vm realm, so compare its contents rather
+  // than the reference: `deepEqual` would fail on the prototype difference alone.
+  assert.deepEqual([...exports.inject], ['slots', 'locale'])
+})
+
+test('dictionaries, styles and the settings slot all register', () => {
+  const { inserted, effects } = boot()
+  const localeLine = inserted.find(entry => entry.startsWith('__locale__'))
+  assert.ok(localeLine, 'the dictionary namespace must register')
+  assert.ok(localeLine.includes('zh') && localeLine.includes('en'), 'both languages are required')
+  assert.ok(effects.includes('inject:settings.section'), 'the settings section must register')
+  assert.ok(effects.includes('dsh-plus-plus: fonts'), 'the font stylesheet effect must run')
+})
+
+test('both dictionary halves carry identical keys', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+  const block = /const DICT = \{[\s\S]*?\n {4}\}/.exec(source)?.[0]
+  assert.ok(block, 'DICT must be locatable')
+  const zhStart = block.indexOf('zh: {')
+  const enStart = block.indexOf('en: {')
+  assert.ok(zhStart >= 0 && enStart > zhStart, 'both halves must be present')
+  const keys = text => new Set([...text.matchAll(/'([a-zA-Z.]+)':/g)].map(m => m[1]))
+  const zh = keys(block.slice(zhStart, enStart))
+  const en = keys(block.slice(enStart))
+  // `locale.register` rejects an unbalanced namespace at runtime, so catch it here.
+  for (const key of zh) assert.ok(en.has(key), `DICT.en is missing '${key}'`)
+  for (const key of en) assert.ok(zh.has(key), `DICT.zh is missing '${key}'`)
+})
+
+test('every @import points at a route the host actually serves', () => {
+  const css = stylesheet(boot())
+  const imports = [...css.matchAll(/@import url\("([^"]+)"\)/g)].map(m => m[1])
+  assert.ok(imports.length > 0, 'the stylesheet must import the packaged faces')
+
+  for (const href of imports) {
+    assert.ok(href.startsWith(`${FONT_ROUTE}/`), `${href} must sit under the font route`)
+    const rest = href.slice(FONT_ROUTE.length + 1).split('/')
+    const family = rest.shift()
+    assert.ok(FAMILIES.includes(family), `${family} is not a served family`)
+    // The stylesheet the browser will fetch next must exist on disk.
+    const root = assetRoot(family)
+    assert.ok(root !== undefined, `${family} must resolve to an asset root`)
+    const file = path.resolve(root, rest.join('/'))
+    assert.ok(file.startsWith(root + path.sep), `${href} must stay inside ${family}`)
+    assert.ok(fs.existsSync(file), `${href} does not exist on disk`)
+  }
+})
+
+test('the stack puts JetBrains Mono first and HarmonyOS Sans as the CJK fallback', () => {
+  const css = stylesheet(boot())
+  const mono = /--pp-font-mono:\s*([^;]+);/.exec(css)?.[1] ?? ''
+  const sans = /--pp-font-sans:\s*([^;]+);/.exec(css)?.[1] ?? ''
+  assert.match(mono, /^'JetBrains Mono'/, 'JetBrains Mono must lead the mono stack')
+  assert.ok(mono.includes("'HarmonyOS Sans'"), 'HarmonyOS Sans must follow it for CJK')
+  assert.match(sans, /^'HarmonyOS Sans'/, 'body text must lead with the Chinese face')
+})
+
+test('the stylesheet only reaches for font assets', () => {
+  const css = stylesheet(boot())
+  const urls = [...css.matchAll(/url\("([^"]+)"\)/g)].map(m => m[1])
+  for (const url of urls) {
+    const extension = url.split('?')[0].split('.').pop()
+    assert.ok(['woff2', 'woff', 'css'].includes(extension), `${url} is not a font asset`)
+  }
+})
+
+// ── runner ───────────────────────────────────────────────────────────────────
+
+let failures = 0
+for (const [name, fn] of tests) {
+  try {
+    await fn()
+    process.stdout.write(`  ok  ${name}\n`)
+  } catch (error) {
+    failures += 1
+    process.stdout.write(`FAIL  ${name}\n      ${error?.message ?? error}\n`)
+  }
+}
+process.stdout.write(`\n${tests.length - failures}/${tests.length} passed\n`)
+process.exit(failures === 0 ? 0 : 1)

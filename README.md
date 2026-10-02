@@ -1,25 +1,69 @@
 # dsh-plus-plus
 
-DeepSeek Harness 多功能增强插件 —— **仓库骨架，功能待定**。
+DeepSeek Harness 多功能增强插件。
 
-目标领域（尚未细化）：主题、提示词、界面功能、对话优化、能力扩展。
+目标领域：主题、提示词、界面功能、对话优化、能力扩展。**目前只实现了字体。**
 
 ## 状态
 
-当前只有仓库基础设施，没有任何功能代码：
-
 ```
-.gitignore        忽略依赖、构建产物与 tmp/ 等运行时残留
-README.md         本文件
+src/fonts.js       字体路由：把两个 npm 包的 woff2 与样式表喂给浏览器
+index.js           宿主半身入口
+client.js          浏览器半身（手写 ModuleLoader bundle，无构建步骤）
+cordis.patch.yml   把宿主半身挂进 profile 合成
+scripts/           宿主与浏览器两侧的自测
 ```
 
-插件本体尚未创建。下面这些是**确定要做**的事，不是已经做完的事：
+## 已实现：字体栈
 
-- [ ] `package.json` —— 声明 bundle patch 与浏览器半身
-- [ ] `cordis.patch.yml` —— 把宿主半身挂进 profile 合成
-- [ ] `index.js` —— 宿主半身入口
-- [ ] `client.js` —— 浏览器半身（手写 ModuleLoader bundle，无构建步骤）
-- [ ] `scripts/` —— 打包前置检查与自测
+**JetBrains Mono 优先，鸿蒙字体兜底中文，两者都来自 npm 依赖，不吃系统安装。**
+
+```bash
+npm install @fontsource/jetbrains-mono harmonyos-sans-webfont-splitted
+```
+
+浏览器半身发的样式表：
+
+```css
+--pp-font-mono: 'JetBrains Mono', 'HarmonyOS Sans', ui-monospace, …;
+--pp-font-sans: 'HarmonyOS Sans', system-ui, …;
+```
+
+浏览器按**字符**逐个解析这条列表，所以一行里混排时拉丁字母走 JetBrains Mono、
+汉字自动落到鸿蒙字体，不需要再写 `unicode-range` 去切换。
+
+两个包各自的样式表都带 `local()` 优先声明，机器上碰巧装了字体就直接用、不下载分片；
+npm 包是**兜底保证**，不是首选。
+
+### 为什么走一条路由而不是打包器
+
+`client.js` 是手写 ModuleLoader bundle，没有构建步骤，也就没有打包器去 hash、inline 或
+base64 这些字体。宿主因此用一条 `prefix` 路由 `/api/dsh-plus-plus/fonts/*` 把它们发出去。
+
+每个包从**各自的包根**提供，因为它们自带的样式表用相对 `url()`：
+`@fontsource/jetbrains-mono` 写 `./files/…`，鸿蒙包写 `./Regular/…`。样式表原样透传、
+一个字都不改，相对地址自然继续成立。自测里有一条专门守着这个约定——包根一旦挪位就会红。
+
+中文侧每个字重切了约 82 个分片（`unicode-range`），4.6 MB/字重，但页面**只会下载屏幕上
+真正出现过的字块**。装包本身不小（整个包约 63 MB），运行时只取用到的那几块。
+
+### 安全
+
+路由同源可达，所以按静态文件服务器的标准做法收紧：
+
+- 扩展名白名单（仅 `woff2` / `woff` / `css`），其余 403
+- 路径包含 `..` 或 NUL 直接 400，不做规范化——`%2e%2e` 会漏过
+- 解析后再校验绝对路径仍位于包根之内
+
+## 开发
+
+```bash
+npm test
+```
+
+15 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
+扩展名白名单），浏览器侧 6 项（bundle 解析、双语字典键一致、每条 `@import` 都指向
+磁盘上真实存在且在包根内的文件、字体栈顺序）。
 
 ## 已确认的技术约束
 
