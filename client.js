@@ -137,12 +137,20 @@ code, pre, kbd, samp, [class*='mono'], [class*='code'] {
       ctx.effect(() => ctx.locale.register(NS, { zh: DICT.zh, en: DICT.en }), 'dsh-plus-plus: dictionaries')
       const t = ctx.locale.bind(NS)
 
-      // Inserted from an effect, not at factory time: `styles` only exists inside
-      // this factory body, and a stylesheet inserted eagerly would outlive the
-      // fiber that owns it.
+      // The stylesheet lives in its own <style> tag, owned by this effect so a
+      // fiber unload takes it with it.
+      //
+      // It is created with `document.createElement` rather than a `styles` builtin:
+      // this bundle is loaded through `window.__ModuleLoader__`, whose factory
+      // receives only `require` — `styles` exists solely on the *dynamic* client-half
+      // path (`evaluateClientHalf`), so referencing it here throws
+      // "styles is not defined" and fails the whole entry at boot.
       ctx.effect(() => {
-        const dispose = styles.insert(fontCss())
-        return () => { try { dispose() } catch { /* already removed */ } }
+        const style = document.createElement('style')
+        style.setAttribute('data-plugin', 'dsh-plus-plus')
+        style.textContent = fontCss()
+        document.head.appendChild(style)
+        return () => style.remove()
       }, 'dsh-plus-plus: fonts')
 
       ctx.slots.inject('settings.section', () => ctx.slots.register({

@@ -32,15 +32,28 @@ function boot() {
   const inserted = []
   const effects = []
 
+  // The sandbox deliberately provides ONLY what a real page provides. In particular
+  // it does not define `styles`: that builtin belongs to the *dynamic* client-half
+  // path (`evaluateClientHalf`), not to a `__ModuleLoader__` bundle, whose factory
+  // receives just `require`. Supplying it here once hid a boot failure that only
+  // appears in the real shell.
+  const styleTags = []
   const sandbox = {
     window: { __ModuleLoader__: { load: value => Object.assign(descriptor, value) } },
     console,
-    document: { documentElement: { lang: 'zh' } },
+    document: {
+      documentElement: { lang: 'zh' },
+      createElement: tag => (tag === 'style'
+        ? { tag, textContent: '', setAttribute: noop, remove: () => { styleTags.pop() } }
+        : {}),
+      head: {
+        appendChild: node => { styleTags.push(node); return node },
+      },
+    },
     fetch: async () => ({ ok: true, status: 200 }),
     setInterval: noop,
     clearInterval: noop,
   }
-  sandbox.styles = { insert: css => { inserted.push(css); return noop } }
   vm.createContext(sandbox)
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8'), sandbox, { filename: 'client.js' })
 
@@ -73,12 +86,12 @@ function boot() {
   })
   exports.apply(ctx)
 
-  return { descriptor, inserted, effects, exports, sandbox }
+  return { descriptor, inserted, effects, exports, sandbox, styleTags }
 }
 
-/** The stylesheet text the client inserted (skipping the `__locale__` markers). */
-function stylesheet(boot) {
-  return boot.inserted.filter(entry => !entry.startsWith('__locale__')).join('\n')
+/** The stylesheet the plugin inserted, read back out of the <style> tag. */
+function stylesheet(result) {
+  return result.styleTags.map(node => node.textContent ?? '').join('\n')
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────
@@ -90,6 +103,38 @@ test('the bundle parses and registers as dsh-plus-plus', () => {
   // The bundle array comes from another vm realm, so compare its contents rather
   // than the reference: `deepEqual` would fail on the prototype difference alone.
   assert.deepEqual([...exports.inject], ['slots', 'locale'])
+})
+
+test('apply() runs to completion, as the shell requires at boot', () => {
+  // The regression this guards: `apply` used to throw `styles is not defined`,
+  // because the `styles` builtin belongs to the dynamic client-half path and not
+  // to a `__ModuleLoader__` bundle. `boot()` throws if apply throws, so reaching
+  // this assertion at all is the test — but say it explicitly so a failure names
+  // the cause instead of surfacing as an opaque harness error.
+  let result
+  assert.doesNotThrow(() => { result = boot() }, 'apply(ctx) must not throw')
+  assert.ok(result.effects.includes('dsh-plus-plus: fonts'), 'the font stylesheet effect must run')
+  assert.equal(result.styleTags.length, 1, 'exactly one <style> tag must be inserted')
+  assert.ok(result.styleTags[0].textContent.length > 0, 'the style tag must carry the stylesheet')
+})
+
+test('the bundle references no free variable the loader does not provide', () => {
+  // `__ModuleLoader__` factories receive only `require` plus page globals. Any
+  // other bare identifier resolves to a page global or throws at boot, so check
+  // the handful this bundle is allowed to lean on.
+  //
+  // Comments are stripped first: prose like "served by the host" would otherwise
+  // match `host.` and fail a test about code.
+  const source = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+  for (const builtin of ['styles', 'host', 'harness']) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`(?<![.\\w$'"\`])${builtin}\\s*\\.`),
+      `${builtin} is not provided to a __ModuleLoader__ bundle — use document.createElement or ctx`,
+    )
+  }
 })
 
 test('dictionaries, styles and the settings slot all register', () => {
