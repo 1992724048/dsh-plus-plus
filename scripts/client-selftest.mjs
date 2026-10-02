@@ -198,6 +198,25 @@ test('the stylesheet only reaches for font assets', () => {
   }
 })
 
+test('the host font variables are re-pointed at our stacks', () => {
+  // Regression: the first version wrote `html, body { font-family }`, which any
+  // class selector outranks — the sidebar changed but the conversation did not.
+  // The conversation is built from these two host variables (including the
+  // markdown heading ladder), so redefining them is what actually reaches it.
+  const css = stylesheet(boot())
+  const declared = (name) => new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(css)?.[1]?.trim()
+
+  assert.equal(declared('--dsw-font-family'), 'var(--pp-font-sans)', 'body text must follow our sans stack')
+  assert.equal(declared('--ds-font-family-code'), 'var(--pp-font-mono)', 'code must follow our mono stack')
+
+  // And the stacks themselves must lead with the bundled faces.
+  assert.match(declared('--pp-font-mono') ?? '', /^'JetBrains Mono'/)
+  assert.match(declared('--pp-font-sans') ?? '', /^'HarmonyOS Sans'/)
+
+  // Do not reintroduce a bare element rule: it is what silently lost the fight.
+  assert.doesNotMatch(css, /^\s*html\s*,/m, 'an `html, body` rule loses to any class selector')
+})
+
 // ── runner ───────────────────────────────────────────────────────────────────
 
 let failures = 0

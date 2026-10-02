@@ -86,15 +86,34 @@ window.__ModuleLoader__.load({
      * `local()`-first: if the machine happens to have a face, the browser uses it
      * and never fetches a shard. The npm package is the guarantee, not the first
      * choice.
+     *
+     * The host already owns two font variables — `--dsw-font-family` for body
+     * text and `--ds-font-family-code` for code — and the conversation surface is
+     * built entirely out of them, including the markdown heading ladder
+     * (`--dsw-font-markdown-h1…h4` all end in `var(--dsw-font-family)`).
+     *
+     * So we redefine those two variables rather than writing our own element
+     * rules. An `html, body` rule loses to any class selector that sets its own
+     * `font-family`, which is exactly why the first version covered the sidebar
+     * but not the conversation. Redefining the variable reaches every consumer at
+     * once and keeps the host's own size/weight ladder intact.
      */
     const STACK_CSS = `
 :root {
   --pp-font-mono: 'JetBrains Mono', 'HarmonyOS Sans', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --pp-font-sans: 'HarmonyOS Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Re-point the host's own font variables at our stacks. Body text keeps the
+     host's CJK-friendly tail as a final fallback. */
+  --dsw-font-family: var(--pp-font-sans);
+  --ds-font-family-code: var(--pp-font-mono);
+
+  /* The host reads a third variable in a few places (document preview, tool
+     cards) where it falls back to inheriting; point it at the body face too. */
+  --dsw-font: var(--pp-font-sans);
 }
-html, body, button, input, textarea, select { font-family: var(--pp-font-sans); }
-code, pre, kbd, samp, [class*='mono'], [class*='code'] {
-  font-family: var(--pp-font-mono);
+code, pre, kbd, samp {
+  font-family: var(--ds-font-family-code);
   font-feature-settings: 'liga' 1, 'calt' 1;
 }
 `.trim()
