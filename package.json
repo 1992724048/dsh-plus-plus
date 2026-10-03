@@ -19,7 +19,9 @@
     "probe:reload": "node scripts/probe-reload.mjs",
     "check:selectors": "node scripts/check-composer-selectors.mjs",
     "watch": "node scripts/watch-chunks.mjs",
-    "sync:entry": "node scripts/watch-chunks.mjs --once"
+    "sync:entry": "node scripts/watch-chunks.mjs --once",
+    "check:css": "node scripts/check-css-literals.mjs",
+    "lint:css": "node scripts/check-css-literals.mjs"
   },
   "files": [
     "index.js",

@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# Pre-commit guard: reject a stray backtick inside a CSS template literal.
+#
+# A CSS sheet is a JavaScript template literal, and a backtick in one closes it
+# early — the rest of the stylesheet is then read as JavaScript and the bundle
+# stops parsing. That mistake landed ten times in this repository, each time
+# surfacing far from the cause, and the test suite only caught it after the edit
+# was already written. This runs before the commit, so it never lands.
+#
+# The logic lives in scripts/check-css-literals.mjs so it can also run on its own
+# and as the first step of `npm test`; this hook only wires it up.
+#
+# Enabled with:  git config core.hooksPath .githooks
+
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+if [ ! -f scripts/check-css-literals.mjs ]; then
+  echo "pre-commit: scripts/check-css-literals.mjs is missing; skipping" >&2
+  exit 0
+fi
+
+# Nothing staged from the bundles? Then there is nothing this can catch.
+if ! git diff --cached --name-only -- 'client*.js' | grep -q .; then
+  exit 0
+fi
+
+if ! node scripts/check-css-literals.mjs; then
+  echo "" >&2
+  echo "commit aborted. Fix the stylesheet comments above — describe CSS in prose" >&2
+  echo "instead of quoting it — then commit again." >&2
+  exit 1
+fi
+
+exit 0
