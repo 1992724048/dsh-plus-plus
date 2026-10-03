@@ -60,6 +60,32 @@ on the bare package name`——写成子路径会静默变成"只有宿主、没
 真要让每个功能成为独立可插拔的插件，得拆成多个 npm 包各自一行，代价是失去共享
 的 core 层。
 
+### 宿主怎么加载分包：`require` 不是分包接口
+
+壳交给 factory 的 `require` 有**两个成员，语义完全不同**：
+
+| 成员 | 行为 |
+| --- | --- |
+| `require(spec)` | **同步查模块表**。只认平台 seed 词（`react`、`react-dom`、`react/jsx-runtime`、`@deepseek-ai/cordis`、`@deepseek-ai/dsh-client-store`、`@deepseek-ai/dsh-client-ui-slots`、`-primitives`、`-dockkit`）或**已物化**的 graph row。其余一律抛 `missed the module table` |
+| `require.async('./x.js')` | 分包路径。只接受**相对**路径、且文件名匹配 `client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js`，返回 promise |
+
+所以分包只能写 `require.async('./client.core.js')`。写
+`require('dsh-plus-plus/client.core.js')` 在 Node 下能解析、自测也能过，**只在浏览器里
+炸**——这条真的炸过一次。
+
+分包名必须是 `./` 相对形式；`dsh-plus-plus/` 前缀只对 Node 自己的解析器有效（`npm pack`
+和 `probe:install` 走的是那条路）。
+
+`require.async` 返回 promise，所以 `apply` 是 async 的；壳会 await 客户端的 `apply`，没问题。
+
+### 功能 chunk 不自己注册
+
+`defineFeature` 在 core chunk 里，而 core 只能**异步**拿到，所以功能 chunk 在 factory 里
+没法调它。改为：功能 chunk **导出** `descriptor`，由入口在 await 完之后统一交给
+`core.defineFeature`。入口是两个半身唯一的会合点。
+
+新增一个功能仍然只是：一个 `client.<名字>.js` + `CHUNKS` 里加一行。
+
 ### core 提供什么
 
 功能 chunk 不碰 `document`、不注册 locale、也不管样式表什么时候被移除：
@@ -136,13 +162,19 @@ base64 这些字体。宿主因此用一条 `prefix` 路由 `/api/dsh-plus-plus/
 npm test
 ```
 
-28 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
-扩展名白名单），浏览器侧 19 项（入口解析、`apply()` 跑完、不引用 loader 未提供的
-自由变量、**patch 只有一行且用裸包名**、chunk 文件名合规、**磁盘上的 chunk 与入口
-require 完全一致**、core 单例、每个功能声明完整、启动顺序递增、重复 id 抛错、
-双语不平衡报错并指出键名、合并后字典平衡、设置页组合出每节、effect 不重复注册、
-每条 `@import` 都指向磁盘上真实存在且在包根内的文件、宿主字体变量被重指向、
-六个圆角 token 归零、扫除规则带 `!important` 且没有全局 `corner-shape`）。
+30 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
+扩展名白名单），浏览器侧 22 项（入口解析、`apply()` 跑完、**所有同步 `require` 都是
+seed 词**、**所有分包都走 `require.async` 且 core 只物化一次**、CHUNKS 里必须是相对
+路径且首个是 core、**功能 chunk 不得同步 require core**、不引用 loader 未提供的自由变量、
+patch 只有一行且用裸包名、chunk 文件名合规、磁盘上的 chunk 与入口 require 完全一致、
+core 单例、每个功能声明完整、启动顺序递增、重复 id 抛错、双语不平衡报错并指出键名、
+合并后字典平衡、设置页组合出每节、effect 不重复注册、每条 `@import` 都指向磁盘上真实
+存在且在包根内的文件、宿主字体变量被重指向、六个圆角 token 归零、扫除规则带
+`!important` 且没有全局 `corner-shape`）。
+
+> 前两条是这轮故障的直接教训：**自测的 `require` 必须和壳的完全一致**。之前用一个
+> 什么 specifier 都接受的宽松桩，于是 `missed the module table` 这类只在浏览器里出现的
+> 失败被整整放过了两轮。现在桩分成 `require` / `require.async` 两个成员，并记录每次调用。
 
 > 「磁盘上的 chunk 与入口 require 完全一致」是防漂移那一条：磁盘上有但没人 require
 > 的是死代码；require 了但磁盘上没有的，会在浏览器里加载失败。
@@ -260,6 +292,8 @@ junction 落到 `D:\CODE\dsh-plus-plus\node_modules`。`npm run probe:install` �
   `platform` / `inject` / `external` / `immediately`，**没有 `components`**；而且半身
   绑定在 `name` 为裸包名的那一行，子路径行不带半身。宿主的多组件是「多 bundle
   各占一行」，不是「一个 bundle 内拆」。详见「结构」。
+- **`require` 不是分包接口。** 它是同步查模块表，只认 8 个平台 seed 词或已物化的
+  graph row；分包必须用 `require.async('./client.*.js')`。详见「结构」。
 
 ## 下一步
 

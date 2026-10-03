@@ -16,12 +16,25 @@ window.__ModuleLoader__.load({
     const exports = module.exports
 
     const React = require('react')
-    const core = require('dsh-plus-plus/client.core.js')
     const { createElement: h } = React
-    const { defineFeature, registerStyles, dictionaries, FONT_ROUTE } = core
+
+    /**
+     * The core chunk, reached through `require.async`.
+     *
+     * The shell's plain `require` is a synchronous module-table lookup that answers
+     * only platform seed words and already-materialized rows; a sibling chunk is
+     * neither, and asking for one that way throws `missed the module table` and
+     * fails the whole entry at boot. `require.async` is the chunk path. By the time
+     * this factory runs the entry has already awaited `./client.core.js`, so the
+     * promise settles immediately from the table.
+     *
+     * The result is memoised because a chunk must not register twice.
+     */
+    let corePromise
+    const core = () => (corePromise ??= require.async('./client.core.js'))
 
     // ── copy ───────────────────────────────────────────────────────────────────
-    const DICT = dictionaries('font', {
+    const DICT = {
       zh: {
         'font.title': '字体',
         'font.subtitle': 'JetBrains Mono 优先，鸿蒙字体兜底中文——两者都来自 npm 依赖，不依赖系统安装。',
@@ -42,7 +55,10 @@ window.__ModuleLoader__.load({
         'font.ok': 'Fonts ready',
         'font.missing': 'Font not ready: {name}. The host may have no font route — check that dependencies installed completely.',
       },
-    })
+    }
+
+    /** Route prefix served by the host. Must match `FONT_ROUTE` in src/fonts.js. */
+    const FONT_ROUTE = '/api/dsh-plus-plus/fonts'
 
     // ── what to load ───────────────────────────────────────────────────────────
     /**
@@ -169,7 +185,20 @@ code, pre, kbd, samp {
     }
 
     // ── declaration ────────────────────────────────────────────────────────────
-    defineFeature({
+    /**
+     * The feature descriptor.
+     *
+     * It is *exported*, not registered here: `defineFeature` lives in the core
+     * chunk, and the core chunk is reachable only through `require.async`, so it
+     * cannot be called during this synchronous factory. The entry awaits the chunk,
+     * then hands this descriptor to `core.defineFeature`.
+     *
+     * `apply` is therefore async — it awaits the core chunk to reach
+     * `registerStyles`. By then the entry has already materialized it, so this
+     * settles without another fetch.
+     */
+    exports.id = 'dsh-plus-plus/client.font.js'
+    exports.descriptor = {
       id: 'font',
       group: 'theme',
       order: 10,
@@ -177,12 +206,11 @@ code, pre, kbd, samp {
       css: CSS,
       title: 'font.title',
       settings: Settings,
-      apply(ctx) {
+      async apply(ctx) {
+        const { registerStyles } = await core()
         registerStyles(ctx, CSS, 'font')
       },
-    })
-
-    exports.id = 'dsh-plus-plus/client.font.js'
+    }
     return module.exports
   },
 })

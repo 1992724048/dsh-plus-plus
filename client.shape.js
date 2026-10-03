@@ -11,11 +11,21 @@ window.__ModuleLoader__.load({
     const exports = module.exports
 
     const React = require('react')
-    const core = require('dsh-plus-plus/client.core.js')
     const { createElement: h } = React
-    const { defineFeature, registerStyles, dictionaries } = core
 
-    const DICT = dictionaries('shape', {
+    /**
+     * The core chunk, reached through `require.async`.
+     *
+     * The shell's plain `require` is a synchronous module-table lookup that answers
+     * only platform seed words and already-materialized rows; a sibling chunk is
+     * neither, and asking for one that way throws `missed the module table` and
+     * fails the whole entry at boot. `require.async` is the chunk path. Memoised,
+     * because a chunk must not be fetched twice.
+     */
+    let corePromise
+    const core = () => (corePromise ??= require.async('./client.core.js'))
+
+    const DICT = {
       zh: {
         'shape.title': '直角',
         'shape.subtitle': '面板、卡片、按钮、输入框、代码块、标签全部改为直角；头像、状态点等圆形元素保留。',
@@ -30,7 +40,7 @@ window.__ModuleLoader__.load({
         'shape.pills': 'Pill chips',
         'shape.roundKept': 'Kept round',
       },
-    })
+    }
 
     /**
      * Two layers, because the host uses both styles.
@@ -90,9 +100,21 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    // Booted after `font`: both contribute to one stylesheet and at equal
-    // specificity the later rule wins, so the corner sweep has the last word.
-    defineFeature({
+    // ── declaration ────────────────────────────────────────────────────────────
+    /**
+     * The feature descriptor.
+     *
+     * Exported rather than registered here: `defineFeature` lives in the core chunk,
+     * which is reachable only through `require.async`, so it cannot be called during
+     * this synchronous factory. The entry awaits the chunk, then hands this
+     * descriptor to `core.defineFeature`.
+     *
+     * `order: 20` — booted after `font`. Both contribute stylesheets, and at equal
+     * specificity the later rule wins, so the corner sweep has the last word and no
+     * font rule can bring a rounded corner back.
+     */
+    exports.id = 'dsh-plus-plus/client.shape.js'
+    exports.descriptor = {
       id: 'shape',
       group: 'theme',
       order: 20,
@@ -100,12 +122,11 @@ window.__ModuleLoader__.load({
       css: CSS,
       title: 'shape.title',
       settings: Settings,
-      apply(ctx) {
+      async apply(ctx) {
+        const { registerStyles } = await core()
         registerStyles(ctx, CSS, 'shape')
       },
-    })
-
-    exports.id = 'dsh-plus-plus/client.shape.js'
+    }
     return module.exports
   },
 })

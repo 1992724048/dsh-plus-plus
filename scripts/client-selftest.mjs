@@ -85,41 +85,105 @@ function stubContext() {
 
 let dictsLookup = {}
 
+/** The shell's platform seed list, verbatim. `require` answers only these. */
+const SEED_WORDS = new Set([
+  'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',
+  '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-store',
+  '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-ui-dockkit',
+])
+
 /**
- * Boot the whole client half: the entry, its core, and every feature chunk.
+ * A `require` that models the shell's exactly, because the difference *is* the bug.
  *
- * Returns the pieces a test wants to assert on, plus the effect/slot log.
+ * The shell hands a factory a `require` with two very different members:
+ *
+ *  - `require(spec)` is a **synchronous module-table lookup**. It answers only a
+ *    platform seed word or an already-materialized graph row and throws
+ *    `missed the module table` for anything else. A sibling chunk is neither — which
+ *    is why `require('dsh-plus-plus/client.core.js')` fails the entry at boot, and
+ *    why an earlier harness here that accepted any specifier hid that failure.
+ *  - `require.async(spec)` is the chunk path. It accepts only a relative `./name.js`
+ *    matching `client.*.js`, and returns a promise.
  */
-function boot() {
-  const cache = new Map()
-  // One tag list for every realm, so feature chunks' stylesheets are visible too.
-  const styleTags = []
+function makeRequire(cache, styleTags) {
   const React = {
     createElement: (type, props, ...children) => ({ type, props, children }),
     useState: initial => [initial, noop],
     useEffect: noop,
   }
 
-  const requireImpl = specifier => {
-    if (specifier === 'react') return React
-    if (specifier.startsWith(`${PACKAGE}/`)) {
-      const file = specifier.slice(PACKAGE.length + 1)
-      assert.match(file, CLIENT_CHUNK, `${specifier} is not a valid client chunk name`)
-      if (!cache.has(file)) {
-        cache.set(file, { exports: {} })
-        cache.set(file, { exports: evaluate(file, requireImpl, styleTags).registration.factory(requireImpl) })
-      }
-      return cache.get(file).exports
-    }
-    throw new Error(`unexpected require: ${specifier}`)
+  const loadChunk = file => {
+    assert.match(file, CLIENT_CHUNK, `"${file}" is not a valid client chunk name`)
+    if (cache.has(file)) return cache.get(file).exports
+    // Seed before evaluating so a cycle sees a placeholder rather than recursing;
+    // the real exports replace it below.
+    cache.set(file, { exports: {} })
+    cache.set(file, { exports: evaluate(file, syncRequire, styleTags).registration.factory(syncRequire) })
+    return cache.get(file).exports
   }
+
+  const syncRequire = spec => {
+    requireImpl.calls.push({ kind: 'sync', spec })
+    if (spec === 'react') return React
+    if (SEED_WORDS.has(spec)) {
+      throw new Error(`seed word "${spec}" has no test implementation`)
+    }
+    const record = cache.get(spec)
+    if (record !== undefined) return record.exports
+    throw new Error(
+      `client-modules: require("${spec}") missed the module table — not a platform seed word, `
+      + 'not a materialized module, and no registered package factory',
+    )
+  }
+
+  syncRequire.async = async spec => {
+    requireImpl.calls.push({ kind: 'async', spec })
+    if (!spec.startsWith('./')) throw new Error(`client-modules: invalid relative chunk request "${spec}"`)
+    return loadChunk(spec.slice(2))
+  }
+
+  /** Every `require` / `require.async` call, in order, for the assertions below. */
+  syncRequire.calls = []
+
+  const requireImpl = syncRequire
+  return requireImpl
+}
+
+/**
+ * Boot the whole client half: the entry, its core, and every feature chunk.
+ *
+ * `boot()` resolves the entry's exports but does **not** run `apply` — the chunk
+ * loads are async, so each test awaits `run()` itself. Returning a promise-shaped
+ * result and forgetting to await it is exactly the mistake that made the original
+ * failure invisible, so it is made explicit here.
+ */
+function boot() {
+  const cache = new Map()
+  // One tag list for every realm, so feature chunks' stylesheets are visible too.
+  const styleTags = []
+  const requireImpl = makeRequire(cache, styleTags)
 
   const { registration } = evaluate('client.js', requireImpl, styleTags)
   const exports = registration.factory(requireImpl)
   const stub = stubContext()
-  exports.apply(stub.ctx)
 
-  return { exports, stub, styleTags, cache, requireImpl }
+  return {
+    exports,
+    stub,
+    styleTags,
+    cache,
+    requireImpl,
+    /** Run `apply` and resolve once every chunk has loaded. */
+    run: () => exports.apply(stub.ctx),
+  }
+}
+
+/** Boot and run in one step, for the many assertions that only need the end state. */
+async function bootRun() {
+  const result = boot()
+  await result.run()
+  return result
 }
 
 /** Every stylesheet text the boot inserted, concatenated. */
@@ -137,14 +201,73 @@ test('the entry bundle parses, registers and exports the loader face', () => {
   assert.deepEqual([...exports.inject], ['slots', 'locale'])
 })
 
-test('apply() runs to completion, as the shell requires at boot', () => {
-  // The regression this guards: `apply` used to throw `styles is not defined`,
-  // because the `styles` builtin belongs to the dynamic client-half path and not
-  // to a `__ModuleLoader__` bundle. `boot()` throws if apply throws, so reaching
-  // this assertion is itself the test — but name the cause on failure.
-  let result
-  assert.doesNotThrow(() => { result = boot() }, 'apply(ctx) must not throw')
+test('apply() runs to completion, as the shell requires at boot', async () => {
+  // Two regressions this guards, both of which failed the whole entry in the shell:
+  //
+  //  - `apply` used to throw `styles is not defined`, because the `styles` builtin
+  //    belongs to the dynamic client-half path, not to a `__ModuleLoader__` bundle.
+  //  - `apply` used to throw `require("…/client.core.js") missed the module table`,
+  //    because the shell's `require` is a synchronous seed-word lookup and a sibling
+  //    chunk must go through `require.async`.
+  //
+  // The stub models both faithfully, so reaching this assertion is itself the test;
+  // say it anyway so a failure names the cause.
+  const result = await bootRun()
   assert.ok(result.stub.effects.length > 0, 'apply must install at least one effect')
+  assert.equal(result.cache.size, 3, 'all three chunks must have loaded')
+})
+
+test('chunks are reached through require.async, never the synchronous require', async () => {
+  // The specific mistake: `require('dsh-plus-plus/client.core.js')` compiles fine,
+  // resolves fine under Node's own resolver, and passes a lenient harness — then
+  // fails in the browser with `missed the module table`. Assert the entry only ever
+  // calls the async member for a chunk.
+  const { requireImpl, cache } = await bootRun()
+  const sync = requireImpl.calls.filter(call => call.kind === 'sync')
+
+  assert.ok(sync.length > 0, 'react must be required synchronously')
+  for (const { spec } of sync) {
+    assert.ok(SEED_WORDS.has(spec), `sync require of "${spec}" would miss the module table`)
+  }
+  assert.deepEqual([...new Set(sync.map(call => call.spec))], ['react'],
+    'the only synchronous require must be the react seed word')
+
+  // The entry fetches each chunk in declaration order. The feature chunks then ask
+  // for core again, which is already materialized by then — so those repeats must
+  // be cache hits, not new fetches. Assert first-occurrence order and the count.
+  const asyncSpecs = requireImpl.calls.filter(call => call.kind === 'async').map(call => call.spec)
+  assert.deepEqual([...new Set(asyncSpecs)], ['./client.core.js', './client.font.js', './client.shape.js'],
+    'chunks must be fetched through require.async, in declaration order')
+  assert.equal(cache.size, 3, 'core must be materialized exactly once despite the repeat requests')
+})
+
+test('every chunk name in CHUNKS is relative and matches the chunk rule', async () => {
+  const source = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+  const block = /const CHUNKS = \[([\s\S]*?)\]/.exec(source)
+  assert.ok(block, 'CHUNKS must be locatable')
+  const names = [...block[1].matchAll(/'([^']+)'/g)].map(m => m[1])
+  assert.ok(names.length > 0, 'CHUNKS must not be empty')
+  for (const name of names) {
+    assert.ok(name.startsWith('./'), `${name} must be relative — require.async rejects a package specifier`)
+    assert.match(name.slice(2), CLIENT_CHUNK, `${name} does not match the shell's chunk rule`)
+  }
+  // The core chunk must come first: the entry reads it as loaded[0].
+  assert.equal(names[0], './client.core.js', 'the core chunk must load first')
+})
+
+test('no chunk uses the synchronous require to reach the core', async () => {
+  // The feature chunks were the second place this went wrong: they each did
+  // `require('dsh-plus-plus/client.core.js')` at factory time, which is the same
+  // miss. They must go through `require.async` too.
+  for (const file of ['client.font.js', 'client.shape.js']) {
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    assert.doesNotMatch(source, /require\(\s*['"`]dsh-plus-plus\//,
+      `${file} must not require a chunk synchronously — use require.async('./client.core.js')`)
+    assert.match(source, /require\.async\(\s*['"]\.\/client\.core\.js['"]\s*\)/,
+      `${file} must reach core through require.async`)
+  }
 })
 
 test('the bundle references no free variable the loader does not provide', () => {
@@ -190,8 +313,8 @@ test('every chunk filename satisfies the loader naming rule', () => {
   }
 })
 
-test('the entry requires exactly the chunks that exist on disk', () => {
-  const { requireImpl, cache } = boot()
+test('the entry requires exactly the chunks that exist on disk', async () => {
+  const { requireImpl, cache } = await bootRun()
   const required = [...cache.keys()].sort()
   const onDisk = fs.readdirSync(ROOT).filter(name => /^client\..*\.js$/.test(name)).sort()
   assert.deepEqual(required, onDisk,
@@ -200,8 +323,8 @@ test('the entry requires exactly the chunks that exist on disk', () => {
   for (const [file, entry] of cache) assert.ok(entry.exports, `${file} resolved to nothing`)
 })
 
-test('core is loaded once and is a singleton across chunks', () => {
-  const { cache } = boot()
+test('core is loaded once and is a singleton across chunks', async () => {
+  const { cache } = await bootRun()
   const coreEntries = [...cache.entries()].filter(([file]) => file === 'client.core.js')
   assert.equal(coreEntries.length, 1, 'core must be a single module')
   const core = cache.get('client.core.js').exports
@@ -210,8 +333,8 @@ test('core is loaded once and is a singleton across chunks', () => {
   assert.equal(typeof core.dictionaries, 'function')
 })
 
-test('each feature chunk declares exactly one complete feature', () => {
-  const { cache } = boot()
+test('each feature chunk declares exactly one complete feature', async () => {
+  const { cache } = await bootRun()
   const core = cache.get('client.core.js').exports
   const declared = core.listFeatures()
   const featureChunks = [...cache.keys()].filter(file => file !== 'client.core.js')
@@ -233,25 +356,25 @@ test('each feature chunk declares exactly one complete feature', () => {
   }
 })
 
-test('features boot in ascending order', () => {
+test('features boot in ascending order', async () => {
   // Features share a stylesheet, so at equal specificity the later rule wins.
   // `shape` must therefore come after `font`, or a font rule could re-introduce a
   // rounded corner.
-  const { cache } = boot()
+  const { cache } = await bootRun()
   const orders = [...cache.get('client.core.js').exports.listFeatures()].map(f => f.order)
   assert.deepEqual([...orders], [...orders].sort((a, b) => a - b), 'listFeatures() must be ordered')
 })
 
-test('core rejects a duplicate feature id', () => {
-  const { cache } = boot()
+test('core rejects a duplicate feature id', async () => {
+  const { cache } = await bootRun()
   const core = cache.get('client.core.js').exports
   assert.throws(() => core.defineFeature({ id: 'font' }), /duplicate feature id/,
     'a second feature claiming an id must throw rather than shadow the first')
   assert.throws(() => core.defineFeature({}), /needs a string id/)
 })
 
-test('core rejects an unbalanced dictionary, naming the key', () => {
-  const { cache } = boot()
+test('core rejects an unbalanced dictionary, naming the key', async () => {
+  const { cache } = await bootRun()
   const core = cache.get('client.core.js').exports
   assert.throws(
     () => core.dictionaries('x', { zh: { a: '1', b: '2' }, en: { a: '1' } }),
@@ -260,8 +383,8 @@ test('core rejects an unbalanced dictionary, naming the key', () => {
   )
 })
 
-test('the merged dictionary is balanced across every feature', () => {
-  const { stub } = boot()
+test('the merged dictionary is balanced across every feature', async () => {
+  const { stub } = await bootRun()
   const entry = stub.dictionaries.find(d => d.ns === 'settings.plusPlus')
   assert.ok(entry, 'the entry must register its namespace')
   assert.deepEqual([...Object.keys(entry.dicts)].sort(), ['en', 'zh'])
@@ -271,8 +394,8 @@ test('the merged dictionary is balanced across every feature', () => {
   assert.ok('nav' in entry.dicts.zh, 'the entry keeps its own unprefixed keys')
 })
 
-test('the settings page composes one section per feature', () => {
-  const { stub, cache } = boot()
+test('the settings page composes one section per feature', async () => {
+  const { stub, cache } = await bootRun()
   const page = stub.slots.find(entry => entry.id === 'dsh-plus-plus')
   assert.ok(page, 'the settings section must register')
   assert.equal(page.locale, 'settings.plusPlus')
@@ -285,12 +408,12 @@ test('the settings page composes one section per feature', () => {
   )
 })
 
-test('each effect is registered exactly once', () => {
+test('each effect is registered exactly once', async () => {
   // Regression: the entry wrapped `core.registerStyles` in a second `ctx.effect`,
   // and since `registerStyles` already opens one, the label appeared twice and the
   // disposer chain nested. Harmless today, but the kind of drift that hides a real
   // bug later — so assert the log has no duplicates.
-  const { effects } = boot().stub
+  const { effects } = (await bootRun()).stub
   const seen = new Map()
   for (const label of effects) seen.set(label, (seen.get(label) ?? 0) + 1)
   for (const [label, count] of seen) {
@@ -298,8 +421,8 @@ test('each effect is registered exactly once', () => {
   }
 })
 
-test('every @import points at a route the host actually serves', () => {
-  const { styleTags } = boot()
+test('every @import points at a route the host actually serves', async () => {
+  const { styleTags } = await bootRun()
   const css = allCss(styleTags)
   const imports = [...css.matchAll(/@import url\("([^"]+)"\)/g)].map(m => m[1])
   assert.ok(imports.length > 0, 'the stylesheet must import the packaged faces')
@@ -319,10 +442,10 @@ test('every @import points at a route the host actually serves', () => {
   }
 })
 
-test('the host font variables are re-pointed at our stacks', () => {
+test('the host font variables are re-pointed at our stacks', async () => {
   // Regression: the first version wrote `html, body { font-family }`, which any
   // class selector outranks — the sidebar changed but the conversation did not.
-  const css = allCss(boot().styleTags)
+  const css = allCss((await bootRun()).styleTags)
   const declared = (name) => new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(css)?.[1]?.trim()
 
   assert.equal(declared('--dsw-font-family'), 'var(--pp-font-sans)')
@@ -332,8 +455,8 @@ test('the host font variables are re-pointed at our stacks', () => {
   assert.doesNotMatch(css, /^\s*html\s*,/m, 'an `html, body` rule loses to any class selector')
 })
 
-test('all six host radius tokens are zeroed', () => {
-  const css = allCss(boot().styleTags)
+test('all six host radius tokens are zeroed', async () => {
+  const css = allCss((await bootRun()).styleTags)
   const declared = (name) => new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(css)?.[1]?.trim()
   for (const token of ['xs', 'sm', 'md', 'lg', 'xl', 'panel']) {
     assert.equal(declared(`--dsw-radius-${token}`), '0px', `--dsw-radius-${token} must be zeroed`)
@@ -343,8 +466,8 @@ test('all six host radius tokens are zeroed', () => {
   }
 })
 
-test('the hardcoded-length sweep wins over class rules but spares the round ones', () => {
-  const css = allCss(boot().styleTags)
+test('the hardcoded-length sweep wins over class rules but spares the round ones', async () => {
+  const css = allCss((await bootRun()).styleTags)
 
   // The host hardcodes ~163 radii that no token reaches; the sweep must carry
   // !important to beat a `(0,1,0)` class selector.
@@ -365,8 +488,8 @@ test('the hardcoded-length sweep wins over class rules but spares the round ones
   }
 })
 
-test('the stylesheet only reaches for font assets and theme variables', () => {
-  const css = allCss(boot().styleTags)
+test('the stylesheet only reaches for font assets and theme variables', async () => {
+  const css = allCss((await bootRun()).styleTags)
   for (const url of [...css.matchAll(/url\("([^"]+)"\)/g)].map(m => m[1])) {
     const extension = url.split('?')[0].split('.').pop()
     assert.ok(['woff2', 'woff', 'css'].includes(extension), `${url} is not a font asset`)

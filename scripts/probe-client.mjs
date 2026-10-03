@@ -61,28 +61,59 @@ const React = {
   useEffect: noop,
 }
 
+/** The shell's platform seed list. `require` answers only these, synchronously. */
+const SEED_WORDS = new Set([
+  'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',
+  '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-store',
+  '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-ui-dockkit',
+])
+
 const cache = new Map()
 const styleTags = []
 const loaded = []
 
-function requireImpl(specifier) {
-  if (specifier === 'react') return React
-  if (!specifier.startsWith(`${PACKAGE}/`)) {
-    throw new Error(`client-modules: ${PACKAGE}/client.js requested external "${specifier}"`)
-  }
-  const file = specifier.slice(PACKAGE.length + 1)
-  if (!CLIENT_CHUNK.test(file)) {
-    throw new Error(`client-modules: cannot resolve chunk "${file}" — the name must match client.*.js`)
-  }
-  if (!cache.has(file)) {
+/**
+ * Model the shell's two-member `require` exactly, because the difference is the bug.
+ *
+ * `require(spec)` is a synchronous seed-word / materialized-row lookup that throws
+ * `missed the module table` for anything else — and a sibling chunk is neither.
+ * `require.async(spec)` is the chunk path, accepting only a relative `./client.*.js`.
+ */
+function makeRequire() {
+  const loadChunk = file => {
+    if (!CLIENT_CHUNK.test(file)) {
+      throw new Error(`client-modules: invalid relative chunk request "./${file}"`)
+    }
+    if (cache.has(file)) return cache.get(file).exports
     // Seed first so a require cycle degrades to a placeholder rather than
     // recursing forever; the real exports replace it below.
     cache.set(file, { exports: {} })
     loaded.push(file)
     cache.set(file, { exports: evaluate(file, requireImpl, styleTags) })
+    return cache.get(file).exports
   }
-  return cache.get(file).exports
+
+  const requireImpl = spec => {
+    if (spec === 'react') return React
+    if (SEED_WORDS.has(spec)) throw new Error(`seed word "${spec}" has no probe implementation`)
+    const record = cache.get(spec)
+    if (record !== undefined) return record.exports
+    throw new Error(
+      `client-modules: require("${spec}") missed the module table — not a platform seed word, `
+      + 'not a materialized module, and no registered package factory',
+    )
+  }
+
+  requireImpl.async = async spec => {
+    if (!spec.startsWith('./')) throw new Error(`client-modules: invalid relative chunk request "${spec}"`)
+    return loadChunk(spec.slice(2))
+  }
+
+  return requireImpl
 }
+
+const requireImpl = makeRequire()
 
 let exports
 try {
@@ -93,7 +124,6 @@ try {
 }
 
 console.log('entry id        :', PACKAGE)
-console.log('chunks resolved :', loaded.join(', ') || 'none')
 console.log('exports         :', Object.keys(exports).join(', '))
 console.log('typeof apply    :', typeof exports.apply)
 console.log('inject          :', JSON.stringify([...exports.inject]))
@@ -103,7 +133,9 @@ const effects = []
 const slots = []
 const namespaces = []
 try {
-  exports.apply({
+  // `apply` is async: it fetches the chunks through `require.async` first. Not
+  // awaiting it here is how a chunk-loading failure would slip past this probe.
+  await exports.apply({
     effect(fn, label) {
       const dispose = fn()
       effects.push(label)
@@ -121,6 +153,7 @@ try {
   console.log('apply ok        :', effects.join(', '))
   console.log('dictionaries    :', namespaces.join(', '))
   console.log('slots           :', slots.join(', '))
+  console.log('chunks fetched  :', loaded.join(', ') || 'none')
   console.log('style tags      :', styleTags.length)
   for (const tag of styleTags) {
     const label = tag.getAttribute?.('data-feature') ?? '(unlabelled)'
