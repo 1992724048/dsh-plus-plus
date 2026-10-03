@@ -236,41 +236,46 @@ window.__ModuleLoader__.load({
   background: #fff;
   color: #000;
   border-color: var(--pp-composer-stroke);
+  /* The trigger now clips. The host's own buttons declare no overflow, so without
+     this the labels are free to run outside the box whenever the width cannot
+     follow them — which is what a fixed max-width plus unshrinkable text produces.
+     The host's labels already ellipsize, so clipping here only bounds the edge. */
+  overflow: hidden;
 }
 
-/* The model trigger takes whatever the composer can spare, and refuses to shrink.
+/* The model trigger: wide enough for the name, but still allowed to shrink.
  *
- * The width cap is lifted because the host's own min(360px, 45cqw) is what left
- * the name too narrow — the cqw unit shrinks with the composer.
+ * The host already solves "the name does not fit" properly. It measures the
+ * control groups with a ResizeObserver and, when they cannot share a line, sets
+ * --dsh-composer-model-text-display to none on the row, which hides the name and
+   effort spans and shows a bare icon instead. The label carries min-width:0 and
+   overflow:hidden, so the fallback is the host's design, not a defect.
  *
- * The flex value is the part that matters for the collapsed text. The host watches
- * its control groups with a ResizeObserver and, when they cannot share a line,
- * sets --dsh-composer-model-text-display to none on the row, swapping the model
- * name for a bare icon. Its label also carries min-width:0 and overflow:hidden, so
- * once the trigger is allowed to shrink, the text collapses to zero width and the
- * button renders as a small black square with an icon and a chevron — exactly the
- * 28px box this was reported as.
+ * An earlier version fought that: it set max-width to none, refused to shrink
+   with flex:none, and pinned the label to display:inline with flex-shrink:0. All
+   three broke it. The overflow one was the visible bug — with nothing shrinking
+   and nothing clipping, the text simply ran outside the button. The display one
+ * silently disabled the host's own measurement, so the fallback could never
+   engage.
  *
- * Refusing to shrink pins the trigger to its content, so the measurement never
- * decides to compact it; the row wraps instead when it must, which the host
- * documents as available. The label rules below then keep the name and effort
- * visible even if the compact variable is set for any other reason. */
+ * So this only replaces the width cap, which is what actually left the name too
+ * narrow. It is 50% of the row rather than unbounded, so the trigger cannot crowd
+ * out the send button — and min-width:0 alongside it keeps shrinking possible,
+ * which is what lets the host fall back to the icon. Everything else is left to
+ * the host. */
 [data-composer-card] [data-slot="conversation.input.model"] button {
-  max-width: none;
-  flex: none;
+  max-width: 50cqw;
+  min-width: 0;
 }
 
-/* The model's own text, kept visible regardless of what the row measured.
- *
-   The host sets the text-display variable on the row in compact mode, and the
-   label and effort spans read it. Re-declaring the two spans here, later in the
-   cascade than the host's own rules, wins on order and undoes it. Matched on a
-   class-name fragment because the host exposes no data attribute for them; the
-   fragment is stable where the build hash in front of it is not. */
-[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerLabel"],
-[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"] {
-  display: inline;
-  flex-shrink: 0;
+/* The host's compact-mode text hiding, spelled out so it survives our own
+ * overrides. The label and effort spans read this variable; the icon reads the
+   matching icon-display one. Re-declaring the variable here keeps the pair
+ * consistent — the row sets only the text half, so without this the icon would
+   never appear in compact mode. */
+[data-composer-card] [data-slot="conversation.input.model"] button {
+  --dsh-composer-model-text-display: block;
+  --dsh-composer-model-icon-display: none;
 }
 
 [data-composer-card] [class*="_modes"] button:hover:not(:disabled),

@@ -196,25 +196,44 @@ test('the labelled triggers are found by structure, not by aria-haspopup', async
   for (const block of hovers) assert.match(block, /background:\s*#ededed/)
 })
 
-test('the model trigger keeps its name visible and refuses to shrink', async () => {
-  // The host measures its control groups and, when they cannot share a line, sets
-  // the model text-display variable to none — the name becomes a bare icon. Its
-  // label also carries min-width:0 and overflow:hidden, so a trigger allowed to
-  // shrink renders as an empty 28px square with an icon and a chevron.
+test('the model trigger may shrink, and clips what does not fit', async () => {
+  // The host already handles "the name does not fit": a ResizeObserver on the
+  // control groups sets --dsh-composer-model-text-display to none on the row when
+  // they cannot share a line, swapping the name for a bare icon.
+  //
+  // An earlier version fought that mechanism instead of using it, and produced the
+  // visible bug this now guards: max-width:none plus flex:none plus a label pinned
+  // to display:inline and flex-shrink:0 left nothing able to shrink and nothing
+  // able to clip, so the text ran straight outside the button.
+  //
+  // So the contract is the opposite of what that version assumed: the trigger must
+  // stay shrinkable, and the box must clip.
   const { css } = await featureOf('composer')
 
-  // Scoped past the card prefix so the *override* is matched, not the shared rule
-  // above it — both carry the slot selector, and only the override sets flex.
-  const model = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{\s*max-width:\s*none;([^}]*)\}/.exec(css)
-  assert.ok(model, 'the model trigger must override the shared width and refuse to shrink')
-  assert.match(model[1], /flex:\s*none/, 'it must refuse to shrink, or the label collapses to zero width')
+  const model = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{\s*max-width:\s*([^;]+);([^}]*)\}/.exec(css)
+  assert.ok(model, 'the model trigger must override the shared width')
+  assert.match(model[1], /50cqw/, 'a share of the row, not unbounded — it must not crowd out send')
+  assert.match(model[2], /min-width:\s*0/, 'and min-width:0 so shrinking stays possible')
+  assert.doesNotMatch(model[2], /flex:\s*none/,
+    'flex:none stops the label collapsing to zero width and defeats the host\'s own fallback')
 
-  // The label and effort spans are re-declared so the compact variable cannot win.
-  const labels = /\[class\*="triggerLabel"\][^{]*\{([^}]*)\}/.exec(css)?.[1]
-  assert.ok(labels, 'the model label must be re-declared')
-  assert.match(labels, /display:\s*inline/, 'it must stay visible in the compact mode')
-  assert.match(labels, /flex-shrink:\s*0/, 'and must stop shrinking')
+  // The shared rule must clip, so a label that cannot shrink is bounded by the box.
+  const shared = /\[class\*="_modes"\] button,\s*\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)
+  assert.ok(shared, 'the shared trigger rule must exist')
+  assert.match(shared[1], /overflow:\s*hidden/,
+    'the trigger must clip; without it the text runs outside the button')
+
+  // The host's compact-mode pair stays intact, so the fallback can still engage.
+  const compact = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+  const vars = [...css.matchAll(/--dsh-composer-model-(text|icon)-display:\s*(\w+)/g)]
+    .map(m => [m[1], m[2]])
+  const text = vars.find(([name]) => name === 'text')?.[1]
+  const icon = vars.find(([name]) => name === 'icon')?.[1]
+  assert.equal(text, 'block', 'the name must be shown by default')
+  assert.equal(icon, 'none', 'and the icon hidden, so the host can swap them')
+  void compact
 })
+
 test('every control is pinned to the row\'s vertical centre', async () => {
   // The controls sat lower than they should whenever the message list was not
   // scrolled to the bottom. The cause is vertical placement, not a transform of
