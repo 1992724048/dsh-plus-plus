@@ -293,6 +293,62 @@ export function allCss(styleTags) {
   return styleTags.map(node => node.textContent ?? '').join('\n')
 }
 
+/**
+ * Every CSS rule block in a sheet, as `{ selector, body }`.
+ *
+ * Parsing by scanning braces rather than by regex: these sheets contain
+ * multi-line selector lists and declaration values wrapped across lines, and a
+ * pattern aimed at one rule keeps matching a neighbour instead. Splitting on the
+ * braces cannot confuse two adjacent rules whatever their shape — which is what
+ * several earlier regex attempts could not manage.
+ */
+export function cssRules(css) {
+  const rules = []
+  let selector = ''
+  let body = ''
+  let depth = 0
+  for (const char of css) {
+    if (char === '{') {
+      depth += 1
+      if (depth === 1) {
+        // Comments precede the selector and would otherwise be read as part of it,
+        // which makes a rule impossible to match on the selectors alone.
+        selector = body.replace(/\/\*[\s\S]*?\*\//g, '').trim()
+        body = ''
+      }
+      continue
+    }
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0) {
+        rules.push({ selector, body: body.replace(/\/\*[\s\S]*?\*\//g, '').trim() })
+        selector = ''
+        body = ''
+      }
+      continue
+    }
+    body += char
+  }
+  return rules
+}
+
+/**
+ * The rules whose selector list mentions `needle`.
+ *
+ * Sorted longest selector first, so a caller asking about one element gets the
+ * narrowest rule rather than whichever happens to come first.
+ */
+export function rulesMatching(css, needle) {
+  return cssRules(css)
+    .filter(rule => rule.selector.includes(needle))
+    .sort((a, b) => b.selector.length - a.selector.length)
+}
+
+/** The body of the narrowest matching rule, or undefined. */
+export function bodyMatching(css, needle) {
+  return rulesMatching(css, needle)[0]?.body
+}
+
 /** A recording theme service, for tests that drive `applyPalette` directly. */
 export function themeStub() {
   const applied = []

@@ -68,7 +68,15 @@ window.__ModuleLoader__.load({
       '--pp-composer-surface': { light: 'rgb(255 255 255 / 50%)', dark: '#000' },
       '--pp-composer-control': { light: 'rgb(0 0 0 / 12%)', dark: '#000' },
       '--pp-composer-accent': { light: '#000', dark: '#fff' },
-      '--pp-composer-accent-hover': { light: 'rgb(0 0 0 / 78%)', dark: '#e8e8e8' },
+      // The hover the user asked for: the attach and send buttons go yellow. One
+      // value for both schemes, since it was specified as a single colour.
+      '--pp-composer-accent-hover': { light: '#ffee22', dark: '#ffee22' },
+      '--pp-composer-accent-hover-ink': { light: '#000', dark: '#000' },
+      // How long the accent pair takes to cross-fade on hover.
+      '--pp-composer-accent-transition': { light: '200ms', dark: '200ms' },
+      // The labelled triggers get a quiet grey on hover, as they are not the
+      // primary action.
+      '--pp-composer-white-hover': { light: '#ededed', dark: '#ededed' },
       '--pp-composer-stroke': { light: 'rgb(0 0 0 / 16%)', dark: 'rgb(255 255 255 / 22%)' },
       '--pp-composer-hover': { light: 'rgb(0 0 0 / 8%)', dark: '#1a1a1a' },
       '--pp-composer-blur': { light: '16px', dark: '0px' },
@@ -245,14 +253,15 @@ window.__ModuleLoader__.load({
 
 /* The model trigger's width.
  *
- * max-width replaces the host's min(360px, 45cqw), which is what left the name
- * too narrow. It is the row's own share rather than unbounded, so the trigger
- * cannot crowd out the send button.
+ * It shares the labelled-trigger rule above, so the width is the same as the
+ * permission trigger's — the model name simply ellipsizes past it, which is the
+ * host's own behaviour for the label. An earlier version gave the model its own
+ * max-width of 50cqw, which made it visibly wider than the permission button and
+ * read as a different treatment; the cap is shared now.
  *
- * min-width: 0 keeps the host's own fallback reachable — when the row genuinely has
- * no room the trigger may still shrink and the row wraps. Nothing here stops that. */
+ * min-width:0 keeps the host's own fallback reachable: when the row genuinely
+ * has no room the trigger may still shrink and the row wraps. */
 [data-composer-card] [data-slot="conversation.input.model"] button {
-  max-width: 50cqw;
   min-width: 0;
 }
 
@@ -287,9 +296,11 @@ window.__ModuleLoader__.load({
   display: none !important;
 }
 
+/* The labelled triggers keep their quiet grey hover. They are not the primary
+   action, so the accent pair's yellow is deliberately not shared with them. */
 [data-composer-card] [class*="_modes"] button:hover:not(:disabled),
 [data-composer-card] [data-slot="conversation.input.model"] button:hover:not(:disabled) {
-  background: #ededed;
+  background: var(--pp-composer-white-hover);
 }
 
 /* Square controls: attach and send.
@@ -322,16 +333,23 @@ window.__ModuleLoader__.load({
 
 /* Attach: the "+" that opens the file/command list — the only button carrying
    aria-haspopup of listbox, and the first button in the row's leading group.
-   Both anchors are listed so a change to either still leaves the accent applied. */
+   Both anchors are listed so a change to either still leaves the accent applied.
+
+   The transition is declared on the resting state, not on the hover. A rule that
+   appears only while hovered animates *into* that state but snaps out of it, so
+   the fade would be one-way. */
 [data-composer-card] button[aria-haspopup="listbox"],
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
   background: var(--pp-composer-accent);
   color: var(--pp-composer-surface);
+  transition: background-color var(--pp-composer-accent-transition) ease,
+              color var(--pp-composer-accent-transition) ease;
 }
 
 [data-composer-card] button[aria-haspopup="listbox"]:hover:not(:disabled),
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type:hover:not(:disabled) {
   background: var(--pp-composer-accent-hover);
+  color: var(--pp-composer-accent-hover-ink);
 }
 
 /* Send: the last button of the trailing group, whatever the activity slot is doing.
@@ -342,10 +360,13 @@ window.__ModuleLoader__.load({
   width: var(--pp-composer-control-size);
   height: var(--pp-composer-control-size);
   padding: 0;
+  transition: background-color var(--pp-composer-accent-transition) ease,
+              color var(--pp-composer-accent-transition) ease;
 }
 
 [data-composer-card] [class*="_trailing"] button:last-of-type:hover:not(:disabled) {
   background: var(--pp-composer-accent-hover);
+  color: var(--pp-composer-accent-hover-ink);
 }
 
 [data-composer-card] [class*="_trailing"] button:last-of-type:disabled {

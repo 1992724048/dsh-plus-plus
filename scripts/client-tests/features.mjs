@@ -9,7 +9,7 @@
 
 import assert from 'node:assert/strict'
 
-import { allCss, bootRun, test } from './harness.mjs'
+import { allCss, bootRun, rulesMatching, test } from './harness.mjs'
 
 /** One feature's descriptor, booted. */
 async function featureOf(id) {
@@ -114,12 +114,13 @@ test('the composer chunk restyles without taking over the composer slot', async 
   assert.match(css, /background:\s*var\(--pp-composer-surface\)/,
     'the editor must take its surface from the palette, not a literal')
 
-  // Three literal colours are allowed and intentional: the pure-white triggers and
-  // their hover. Asserting they are the ONLY ones means a new literal has to be
-  // argued for rather than slipping in.
+  // Literal colours are allowed and intentional: the pure-white labelled triggers,
+  // their black content, and the accent ink that keeps them readable. Asserting
+  // they are the ONLY ones means a new literal has to be argued for rather than
+  // slipping in — the yellow hover went into the palette for exactly that reason.
   const literals = [...css.matchAll(/:\s*(#[0-9a-f]{3,8})\b/gi)].map(m => m[1].toLowerCase())
-  assert.deepEqual([...new Set(literals)].sort(), ['#000', '#ededed', '#fff'],
-    `only the pure-white triggers may use literal colours; found ${literals.join(', ')}`)
+  assert.deepEqual([...new Set(literals)].sort(), ['#000', '#fff'],
+    `only the labelled triggers may use literal colours; found ${literals.join(', ')}`)
 
   // Each control is its own bordered block, so the row itself is not a surface.
   assert.match(css, /:is\(button, \[role="button"\]\)\s*\{[^}]*border:\s*1px solid var\(--pp-composer-stroke\)/,
@@ -189,49 +190,72 @@ test('the labelled triggers are found by structure, not by aria-haspopup', async
   assert.doesNotMatch(css, /button\[aria-haspopup="listbox"\][^{]*\{[^}]*background:\s*#fff/,
     'the attach button must keep the accent fill')
 
-  // One white fill and one white hover, shared — so the two cannot drift apart.
+  // One white fill, and one hover — shared, so the two cannot drift apart. The
+  // hover comes from the palette, not a literal.
   assert.equal([...css.matchAll(/background:\s*#fff/g)].length, 1, 'the white fill must be declared once')
   const hovers = [...css.matchAll(/\[class\*="_modes"\] button:hover[^{]*\{([^}]*)\}/g)].map(m => m[1])
   assert.ok(hovers.length > 0, 'the triggers need a hover of their own')
-  for (const block of hovers) assert.match(block, /background:\s*#ededed/)
+  for (const block of hovers) {
+    assert.match(block, /background:\s*var\(--pp-composer-white-hover\)/,
+      'the labelled triggers hover on their own palette value — not the accent yellow')
+  }
 })
 
-test('the model trigger may shrink, and its text is pinned visible', async () => {
-  // Two mechanisms in the host hide the model name, and both have to be answered.
+test('the attach and send buttons hover yellow, cross-fading over 200ms', async () => {
+  const { css, palette } = await featureOf('composer')
+
+  // The colour itself, per the instruction: one value for both schemes.
+  assert.equal(palette['--pp-composer-accent-hover'].light, '#ffee22')
+  assert.equal(palette['--pp-composer-accent-hover'].dark, '#ffee22',
+    'the yellow was specified as one colour, so it is not theme-dependent')
+  assert.equal(palette['--pp-composer-accent-transition'].light, '200ms')
+  assert.equal(palette['--pp-composer-accent-transition'].dark, '200ms')
+
+  // Both accent controls must carry the hover…
+  for (const [name, anchor] of [
+    ['attach', /\[data-composer-card\] button\[aria-haspopup="listbox"\]:hover:not\(:disabled\)/],
+    ['send', /\[data-composer-card\] \[class\*="_trailing"\] button:last-of-type:hover:not\(:disabled\)/],
+  ]) {
+    assert.match(css, anchor, `${name} must have a hover rule`)
+  }
+  assert.equal([...css.matchAll(/var\(--pp-composer-accent-hover\)/g)].length, 2,
+    'exactly the two accent controls use it — the labelled triggers must not')
+
+  // …and the transition must sit on the **resting** state, not on the hover. A
+  // transition declared only while hovered animates into the state and snaps out
+  // of it, so the fade would be one-way and "200ms" would only hold on the way in.
   //
-  // The host hides it in compact mode: a ResizeObserver on the control groups sets
-  // a text-display variable the label and effort spans read, and it gives those
-  // spans a flex-shrink of 1000 — a thousand times anything else, so they reach
-  // zero width first while the icon and chevron keep their size. What renders is a
-  // bare square with no text.
+  // Anchored on the accent fill rather than on the selector: the attach button is
+  // matched by two separate rules — one for its size, one for its colour — and
+  // only the second carries the transition.
+  const attachResting = /\[data-composer-card\] button\[aria-haspopup="listbox"\],\s*\n\[data-composer-card\] \[data-input-scroll\][^{]*\{\s*\n\s*background:\s*var\(--pp-composer-accent\);([^}]*)\}/.exec(css)
+  const sendResting = /\[data-composer-card\] \[class\*="_trailing"\] button:last-of-type\s*\{([^}]*)\}/.exec(css)
+
+  for (const [name, match] of [['attach', attachResting], ['send', sendResting]]) {
+    const resting = match?.[1]
+    assert.ok(resting !== undefined, `${name} resting colour rule must be locatable`)
+    assert.match(resting, /transition:[^;]*background-color[^;]*var\(--pp-composer-accent-transition\)/,
+      `${name} must declare the transition while resting, so it also fades back out`)
+  }
+  // Count by the *declaration*, not the property: the transition wraps onto a
+  // second line for the colour, so each control contributes two matches and a
+  // count of 2 would only ever match a single-property transition.
+  assert.equal([...css.matchAll(/--pp-composer-accent-transition\) ease/g)].length, 4,
+    'both accent controls declare the transition, for background and for colour')
+})
+
+test('the model name and effort are pinned visible', async () => {
+  // The host hides them in compact mode, through two mechanisms: a text-display
+  // variable the spans read, and a flex-shrink of 1000 on those spans — a thousand
+  // times anything else, so they reach zero width first while the icon and chevron
+  // keep their size. What renders is a bare square with no text.
   //
-  // An earlier version fought the first mechanism instead of answering it, and
-  // produced the visible overflow bug this now guards: max-width:none plus
-  // flex:none plus unshrinkable text and no overflow left nothing able to shrink
-  // and nothing able to clip, so the text ran outside the button.
+  // Three attempts to answer that through the variable failed: on the button (the
+  // row is where the host sets it) and on the row (which says the host writes an
+  // inline style, and an inline style outranks every selector). So the spans are
+  // pinned directly, and !important does beat a non-important inline style.
   const { css } = await featureOf('composer')
 
-  // Width: the row's share, not unbounded, so the trigger cannot crowd out send.
-  const model = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{\s*max-width:\s*([^;]+);([^}]*)\}/.exec(css)
-  assert.ok(model, 'the model trigger must override the shared width')
-  assert.match(model[1], /50cqw/, 'a share of the row')
-  assert.match(model[2], /min-width:\s*0/, 'and min-width:0, so the row can still wrap')
-  assert.doesNotMatch(model[2], /flex:\s*none/,
-    'flex:none stops the label collapsing to zero width and defeats the host\'s own fallback')
-
-  // The shared trigger rule clips, which is what keeps forced text inside the box.
-  const shared = /\[class\*="_modes"\] button,\s*\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)
-  assert.ok(shared, 'the shared trigger rule must exist')
-  assert.match(shared[1], /overflow:\s*hidden/,
-    'the trigger must clip; without it the text runs outside the button')
-
-  // The model label must be pinned directly, not through the host's variable.
-  //
-  // Three attempts to reach that through the text-display variable failed: on the
-  // button (the row is where the host sets it) and on the row (which says the host
-  // writes an inline style, and an inline style outranks every selector). So the
-  // spans carry !important instead — which does beat a non-important inline style,
-  // and the host's own rule has none.
   const labels = /\[class\*="triggerLabel"\][^{]*\{([^}]*)\}/.exec(css)?.[1]
   assert.ok(labels, 'the model label must be pinned')
   assert.match(labels, /display:\s*inline\s*!important/, 'the name must stay visible')
@@ -241,8 +265,37 @@ test('the model trigger may shrink, and its text is pinned visible', async () =>
   // The icon is pinned hidden to match, so the compact look cannot half-apply.
   assert.match(css, /\[class\*="triggerIcon"\][^{]*\{[^}]*display:\s*none\s*!important/,
     'the compact-mode icon must not appear alongside a forced-visible name')
+})
 
-  // The trigger clips, which is what keeps forced text inside the box.
+test('the model trigger shares the labelled triggers\' width and may shrink', async () => {
+  // The user reported the model button not matching the permission one. The
+  // background was already shared; what differed was width — the model carried
+  // its own max-width of 50cqw against the shared 340px, so it read as a
+  // different treatment. It is now on the shared cap, and only min-width is left
+  // as an override, so the host can still wrap the row when there is no room.
+  const { css } = await featureOf('composer')
+
+  // Only the rules whose selector list is *just* the model trigger count as
+  // overrides. The shared labelled-trigger rule names it as its second selector,
+  // and that rule is allowed to set the width — it is where both triggers get it.
+  const overrides = rulesMatching(css, '[data-slot="conversation.input.model"] button')
+    .filter(rule => !rule.selector.includes(',') && !rule.selector.includes(':hover'))
+    .map(rule => rule.body)
+
+  assert.ok(overrides.length > 0, 'the model trigger must still be able to override on its own')
+  for (const block of overrides) {
+    assert.doesNotMatch(block, /max-width/,
+      'a standalone override must not re-cap the width — that is what made it look different')
+    assert.doesNotMatch(block, /flex:\s*none/,
+      'flex:none stops the label collapsing to zero width and defeats the host\'s own fallback')
+  }
+  assert.ok(overrides.some(block => /min-width:\s*0/.test(block)),
+    'and keep min-width:0 so the row can still wrap')
+
+  // The shared rule must clip, which is what keeps the forced text inside the box.
+  const shared = /\[class\*="_modes"\] button,\s*\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)
+  assert.ok(shared, 'the shared trigger rule must exist')
+  assert.match(shared[1], /max-width:\s*340px/, 'both triggers share one width cap')
   assert.match(shared[1], /overflow:\s*hidden/,
     'the trigger must clip; without it the text runs outside the button')
 })
