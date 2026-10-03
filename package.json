@@ -17,7 +17,9 @@
     "probe:client": "node scripts/probe-client.mjs",
     "probe:install": "node scripts/probe-install.mjs",
     "probe:reload": "node scripts/probe-reload.mjs",
-    "check:selectors": "node scripts/check-composer-selectors.mjs"
+    "check:selectors": "node scripts/check-composer-selectors.mjs",
+    "watch": "node scripts/watch-chunks.mjs",
+    "sync:entry": "node scripts/watch-chunks.mjs --once"
   },
   "files": [
     "index.js",

@@ -11,7 +11,30 @@ import fs from 'node:fs'
 import path from 'node:path'
 import vm from 'node:vm'
 
-import { ROOT, allChunkFiles, bootRun, readCode, test } from './harness.mjs'
+import { ROOT, allChunkFiles, bootRun, featureChunkFiles, readCode, test } from './harness.mjs'
+
+test('the entry is newer than every chunk it requires', () => {
+  // The shell derives an entry's revision from the *entry file's* metadata —
+  // framedHash over mtimeMs, ctimeMs and size — and resolves a chunk against that
+  // same revision. It never hashes the chunk's own bytes.
+  //
+  // So editing a chunk without touching the entry leaves the browser's cached URL
+  // looking fresh and the change silently does not appear: no error, no crash, and
+  // no amount of restarting helps, because a restart re-derives the same revision
+  // from the same unchanged mtime. Several rounds of composer fixes looked like
+  // no-ops for exactly this reason.
+  //
+  // `npm run watch` keeps the entry ahead of its chunks. This asserts the invariant
+  // that makes the watcher necessary, so a stale tree is caught here rather than by
+  // someone wondering why the screen did not change.
+  const entryMtime = fs.statSync(path.join(ROOT, 'client.js')).mtimeMs
+  const stale = featureChunkFiles()
+    .filter(file => fs.statSync(path.join(ROOT, file)).mtimeMs > entryMtime)
+
+  assert.deepEqual(stale, [],
+    `these chunks are newer than client.js, so the browser keeps serving a stale revision: ${stale.join(', ')}\n`
+    + '    run `npm run sync:entry`, or keep `npm run watch` running, then refresh the page')
+})
 
 test('every bundle parses, and a failure names the line', () => {
   // The only backtick guard that has ever been reliable, and it is this simple one.
