@@ -84,29 +84,44 @@ function evaluate(fileName, requireImpl, styleTags) {
   return { registration, sandbox }
 }
 
-/** A stub client context that records every effect and slot registration. */
+/** A stub client context that records every effect, slot and palette registration. */
 function stubContext() {
   const effects = []
   const slots = []
   const dictionaries = []
+  const palettes = []
+  // Services are created once and handed out by `get`, as a Cordis context does.
+  // A fresh object per `get` would hide the very reuse the palette assertions
+  // depend on — the same trap the host selftest fell into.
+  const locale = {
+    register(ns, dicts) { dictionaries.push({ ns, dicts }); return noop },
+    bind: () => (key) => dictsLookup?.[key] ?? key,
+  }
+  const slotsService = {
+    inject(key, callback) { callback(); return noop },
+    register(options) { slots.push(options); return noop },
+  }
+  const theme = {
+    overrideTokens(source, tokens) { palettes.push({ source, tokens }); return noop },
+  }
+  const services = new Map([['locale', locale], ['slots', slotsService], ['theme', theme]])
+
   const ctx = {
     effect(fn, label) {
       const dispose = fn()
       effects.push(label)
       return typeof dispose === 'function' ? dispose : noop
     },
-    locale: {
-      register(ns, dicts) { dictionaries.push({ ns, dicts }); return noop },
-      bind: ns => (key) => dictsLookup?.[key] ?? key,
-    },
-    slots: {
-      inject(key, callback) { callback(); return noop },
-      register(options, component) { slots.push(options); return noop },
-    },
+    get(name) { return services.get(name) },
+    // The entry and the feature chunks reach the services two ways: through
+    // `ctx.get`, and as properties when they are named in `inject`. Both are
+    // wired here so a chunk written either way works.
+    locale,
+    slots: slotsService,
+    theme,
   }
-  return { ctx, effects, slots, dictionaries }
+  return { ctx, effects, slots, dictionaries, palettes }
 }
-
 let dictsLookup = {}
 
 /** The shell's platform seed list, verbatim. `require` answers only these. */
@@ -198,6 +213,8 @@ function boot() {
     styleTags,
     cache,
     requireImpl,
+    /** Everything `apply` registered: effects, slots, dictionaries, palettes. */
+    ...stub,
     /** Run `apply` and resolve once every chunk has loaded. */
     run: () => exports.apply(stub.ctx),
   }
@@ -540,19 +557,110 @@ test('the composer chunk restyles without taking over the composer slot', async 
   assert.match(css, /\[data-input-scroll\]/, 'must anchor on data-input-scroll')
   assert.doesNotMatch(css, /\.RlGAzG/, 'must not hard-code a build-scoped host class name')
 
-  // The four decisions the user settled on, each with the reason it was made.
-  assert.match(css, /--pp-composer-surface:\s*#000\b/,
-    'the editor must be solid black — translucent let scrolled text smear through')
-  assert.doesNotMatch(css, /backdrop-filter/,
-    'no blur: the composer sits over the conversation, and blur is what made text visible through it')
+  // The structural decisions, each with the reason it was made.
   assert.match(css, /--pp-composer-block-gap:\s*4px/, 'the gutter between blocks is 4px')
-  assert.match(css, /--pp-composer-control-fill:\s*#fff/, 'attach and send sit on white')
+  // Colours live in the palette (see below), not hard-coded here, so the scheme
+  // can flip them. The stylesheet must reference them by variable.
+  assert.match(css, /background:\s*var\(--pp-composer-surface\)/,
+    'the editor must take its surface from the palette, not a literal')
+  assert.doesNotMatch(css, /background:\s*#[0-9a-f]{3,8}\b/i,
+    'no hard-coded colours — they cannot follow the scheme')
   // Each control is its own bordered block, so the row itself is not a surface.
-  assert.match(css, /:is\(button, \[role="button"\]\)\s*\{[^}]*border:\s*var\(--pp-composer-stroke\)/,
+  assert.match(css, /:is\(button, \[role="button"\]\)\s*\{[^}]*border:\s*1px solid var\(--pp-composer-stroke\)/,
     'every control must be its own bordered block')
   assert.match(css, /~ \[class\*="_row"\]\s*\{[^}]*background:\s*transparent/,
     'the tool row must not paint a shared background behind its buttons')
+  // The blur is a variable so one declaration serves both schemes.
+  assert.match(css, /backdrop-filter:\s*blur\(var\(--pp-composer-blur\)\)/,
+    'the blur must come from the palette so dark can switch it off')
   void composer
+})
+
+test('the stub context models ctx.get, or features silently degrade to no-ops', async () => {
+  // Twice now a stub has hidden a real bug: the host one returned a fresh service
+  // object per `get`, and this one had no `get` at all — so `applyPalette` took its
+  // "no theme service" branch and the palette silently never applied, with every
+  // other test still green.
+  //
+  // A stub that answers nothing is the dangerous shape: features written to
+  // degrade gracefully will, in the stub, do exactly that — and a test asserting
+  // the descriptor will still pass. So assert the stub's own fidelity.
+  const { stub } = await bootRun()
+  assert.equal(typeof stub.ctx.get, 'function', 'the stub must provide ctx.get')
+
+  const locale = stub.ctx.get('locale')
+  const slots = stub.ctx.get('slots')
+  const theme = stub.ctx.get('theme')
+  assert.equal(locale, stub.ctx.locale, 'ctx.get must return the same object as the property')
+  assert.equal(slots, stub.ctx.slots, 'ctx.get must return the same object as the property')
+  assert.equal(theme, stub.ctx.theme, 'ctx.get must return the same object as the property')
+  assert.equal(stub.ctx.get('locale'), locale, 'repeated get must return the identical object')
+  assert.equal(stub.ctx.get('absent'), undefined, 'an absent service must answer undefined')
+
+  // And the palette must actually have gone through it.
+  assert.equal(stub.palettes.length, 1,
+    'if this is 0 the stub is hiding the feature; the feature is not the problem')
+})
+
+test('the composer palette is declared for both schemes', async () => {
+  // The host's `overrideTokens` takes a `{ light, dark }` map per token and
+  // recomposes it on a scheme change. That is why the composer declares both
+  // rather than picking a scheme itself — and why a half-declared token would
+  // silently render as the shell's colour in one scheme.
+  const { cache } = await bootRun()
+  const { palette } = cache.get('client.composer.js').exports.descriptor
+
+  assert.ok(palette !== undefined, 'the composer must declare a palette')
+  const entries = Object.entries(palette)
+  assert.ok(entries.length > 0, 'the palette must not be empty')
+  for (const [token, modes] of entries) {
+    assert.ok(token.startsWith('--pp-composer-'), `${token} must be namespaced to this plugin`)
+    assert.deepEqual([...Object.keys(modes)].sort(), ['dark', 'light'],
+      `${token} must declare both schemes`)
+    for (const [scheme, value] of Object.entries(modes)) {
+      assert.equal(typeof value, 'string', `${token}.${scheme} must be a string`)
+      assert.ok(value !== '', `${token}.${scheme} must not be empty`)
+    }
+  }
+
+  // The four values the user specified, in both schemes — asserted against what
+  // `apply` pushed into the theme service, not the descriptor.
+  const { palettes } = await bootRun()
+  assert.equal(palettes.length, 1, 'the composer must apply exactly one palette layer')
+  const applied = palettes[0].tokens
+  const get = (token, scheme) => applied[token][scheme]
+  assert.equal(get('--pp-composer-surface', 'light'), 'rgb(255 255 255 / 50%)',
+    'light: the editor is a translucent white')
+  assert.equal(get('--pp-composer-surface', 'dark'), '#000', 'dark: the editor is solid black')
+  assert.equal(get('--pp-composer-accent', 'light'), '#000', 'light: attach and send are black')
+  assert.equal(get('--pp-composer-accent', 'dark'), '#fff', 'dark: attach and send are white')
+  assert.ok(get('--pp-composer-control', 'light').includes('/'), 'light: the other controls are translucent')
+  assert.equal(get('--pp-composer-control', 'dark'), '#000', 'dark: the other controls are black')
+  // The blur is a variable so one declaration covers both: on in light, off in dark.
+  assert.notEqual(get('--pp-composer-blur', 'light'), '0px', 'light: the surface is blurred')
+  assert.equal(get('--pp-composer-blur', 'dark'), '0px', 'dark: the blur is off, not merely weaker')
+})
+
+test('core applies a palette through the theme service, and survives it being absent', async () => {
+  const { cache } = await bootRun()
+  const core = cache.get('client.core.js').exports
+
+  const applied = []
+  const ctx = {
+    get: name => (name === 'theme'
+      ? { overrideTokens: (source, tokens) => { applied.push({ source, tokens }); return noop } }
+      : undefined),
+  }
+  const palette = { '--pp-x': { light: '#fff', dark: '#000' } }
+  const dispose = core.applyPalette(ctx, palette, 'test')
+  assert.equal(applied.length, 1)
+  assert.deepEqual(applied[0].tokens, palette)
+  assert.equal(typeof dispose, 'function')
+
+  // No theme service: the feature still loads, it just has no palette.
+  const bare = { get: () => undefined }
+  assert.doesNotThrow(() => core.applyPalette(bare, palette, 'test'),
+    'a composition without themes must not fail a feature that declares a palette')
 })
 
 test('the composer identifies the send button without relying on a slot that hides', async () => {

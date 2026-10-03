@@ -122,6 +122,30 @@ window.__ModuleLoader__.load({
       return dicts
     }
 
+    /**
+     * Apply one feature's palette as a host token layer.
+     *
+     * `theme.overrideTokens(source, tokens)` takes a `{ light, dark }` map per token
+     * and recomposes it whenever the scheme changes — which is the host's own
+     * light/dark mechanism, so a feature declares both schemes once and never has
+     * to know how the shell scopes its themes.
+     *
+     * It is idempotent by contract: "calling again with the same source replaces
+     * that source's whole layer and restacks it on top", so a hot reload that
+     * applies the plugin again does not stack duplicates. `source` is pinned to
+     * this package by the host's façade, so passing `label` is only for readability.
+     *
+     * Returns a no-op when the `theme` service is absent, so a feature with a
+     * palette still loads on a composition without themes rather than failing.
+     */
+    function applyPalette(ctx, palette, label) {
+      const theme = ctx.get?.('theme')
+      if (!theme?.overrideTokens || palette === undefined) return () => {}
+      const dispose = theme.overrideTokens('dsh-plus-plus', palette)
+      void label
+      return typeof dispose === 'function' ? dispose : () => {}
+    }
+
     exports.id = 'dsh-plus-plus/client.core.js'
     exports.PACKAGE = 'dsh-plus-plus'
     exports.FONT_ROUTE = FONT_ROUTE
@@ -130,6 +154,7 @@ window.__ModuleLoader__.load({
     exports.listFeatures = listFeatures
     exports.styleSheet = styleSheet
     exports.registerStyles = registerStyles
+    exports.applyPalette = applyPalette
     exports.dictionaries = dictionaries
     return module.exports
   },
