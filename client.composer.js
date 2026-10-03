@@ -208,47 +208,73 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-hover);
 }
 
-/* Permission and model — one rule, so they cannot drift apart.
- *
-   Both are solid white, black content, no shadow. "Pure white" was the
-   instruction, so the fill is a literal rather than a palette entry: a themed
-   near-white would drift from it. The permission button was previously translucent
-   because it fell through to the generic control fill, which is what made the two
-   look different even though they shared a selector.
- *
-   Anchored on aria-haspopup of *menu*, which both labelled triggers carry. The
-   attach button carries listbox, so a rule matching listbox as well would paint
-   the "+" white too and make all three identical.
- *
-   The width is set per trigger rather than left to the host's max-width of
-   min(360px, 45cqw): that cap is what left the model name too narrow, and the
-   host ships a 220px cap on the permission trigger that is too tight for a
-   long permission label. Each gets its own generous width instead, and both
-   ellipsize past it — which is the host's own behaviour for the labels. */
-[data-composer-card] button[aria-haspopup="menu"] {
+/* The two labelled triggers — permission and model — carry a label, an icon and a
+   chevron, so they are sized by content rather than forced square.
+
+   Anchored on structure, not on aria-haspopup. An earlier version used that
+   attribute and it was wrong: the model trigger carries menu, but the permission
+   trigger carries **no** aria-haspopup at all — it opens by other means — so the
+   rule matched only one of the two. The other kept the host's own padding of
+   0 4px 0 8px, its 220px max-width and its transparent fill, which is what it
+   looked like.
+
+   Position within the row is stable and observable, so it is used instead:
+   permission is a button in the modes group, model is the one inside the model
+   slot. Both are white — the fill is a literal rather than a palette entry,
+   because "pure white" was the instruction and a themed near-white would drift
+   from it.
+
+   The width is set here rather than left to the host: the model trigger's
+   min(360px, 45cqw) cap is what left the name too narrow, and the permission
+   trigger's fixed 220px is too tight for a long mode name. Both hosts' labels
+   already ellipsize, so a generous width gives them room before that matters. */
+[data-composer-card] [class*="_modes"] button,
+[data-composer-card] [data-slot="conversation.input.model"] button {
   height: var(--pp-composer-control-size);
-  padding-inline: 12px;
+  padding: 0 12px;
+  max-width: 340px;
   background: #fff;
   color: #000;
   border-color: var(--pp-composer-stroke);
 }
 
-/* The two triggers share every declaration above; only the width differs, because
-   the model's label can be far longer than a permission mode's. Both hosts'
-   labels already ellipsize on their own, so a generous width simply gives them
-   room before that kicks in. */
-[data-composer-card] button[aria-haspopup="menu"] {
-  max-width: 340px;
-}
-
-/* The model trigger carries name + effort + chevron, so it takes whatever the
-   composer can spare. It is matched through its slot, not its class, because the
-   host gives it no data attribute of its own and its class name is a build hash. */
+/* The model trigger takes whatever the composer can spare, and refuses to shrink.
+ *
+ * The width cap is lifted because the host's own min(360px, 45cqw) is what left
+ * the name too narrow — the cqw unit shrinks with the composer.
+ *
+ * The flex value is the part that matters for the collapsed text. The host watches
+ * its control groups with a ResizeObserver and, when they cannot share a line,
+ * sets --dsh-composer-model-text-display to none on the row, swapping the model
+ * name for a bare icon. Its label also carries min-width:0 and overflow:hidden, so
+ * once the trigger is allowed to shrink, the text collapses to zero width and the
+ * button renders as a small black square with an icon and a chevron — exactly the
+ * 28px box this was reported as.
+ *
+ * Refusing to shrink pins the trigger to its content, so the measurement never
+ * decides to compact it; the row wraps instead when it must, which the host
+ * documents as available. The label rules below then keep the name and effort
+ * visible even if the compact variable is set for any other reason. */
 [data-composer-card] [data-slot="conversation.input.model"] button {
   max-width: none;
+  flex: none;
 }
 
-[data-composer-card] button[aria-haspopup="menu"]:hover:not(:disabled) {
+/* The model's own text, kept visible regardless of what the row measured.
+ *
+   The host sets the text-display variable on the row in compact mode, and the
+   label and effort spans read it. Re-declaring the two spans here, later in the
+   cascade than the host's own rules, wins on order and undoes it. Matched on a
+   class-name fragment because the host exposes no data attribute for them; the
+   fragment is stable where the build hash in front of it is not. */
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerLabel"],
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"] {
+  display: inline;
+  flex-shrink: 0;
+}
+
+[data-composer-card] [class*="_modes"] button:hover:not(:disabled),
+[data-composer-card] [data-slot="conversation.input.model"] button:hover:not(:disabled) {
   background: #ededed;
 }
 

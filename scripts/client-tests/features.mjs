@@ -159,58 +159,62 @@ test('every composer control shares one height', async () => {
     "the shared height should match the host's 28px")
 })
 
-test('the model trigger is not width-capped', async () => {
-  // The model name does not fit. Two caps were in the way: the host's own
-  // min(360px, 45cqw) on the model trigger, and a max-width of none was needed
-  // because the trigger holds name + effort + chevron. Both hosts' labels already
-  // ellipsize, so removing the cap gives the name room before that matters.
+test('the labelled triggers are found by structure, not by aria-haspopup', async () => {
+  // The regression, straight from a console dump of the live DOM:
+  //
+  //   permission  <button class="dlU_AG_trigger" aria-label="访问模式…">
+  //               — no aria-haspopup attribute at all
+  //   model       <button class="wq12jW_trigger" aria-haspopup="menu" …>
+  //
+  // A rule anchored on aria-haspopup="menu" therefore matched the model trigger
+  // and **not** the permission one, which kept the host's own padding of
+  // 0 4px 0 8px, its 220px max-width and its transparent fill. That is why the
+  // permission button looked half-transparent and the model one collapsed.
   const { css } = await featureOf('composer')
 
-  // The generic trigger cap is generous enough for a permission mode.
-  const triggers = [...css.matchAll(/button\[aria-haspopup="menu"\]\s*\{([^}]*)\}/g)].map(m => m[1])
-  assert.ok(triggers.length > 0, 'the trigger rule must be locatable')
-  const capped = triggers.find(block => /max-width:\s*340px/.test(block))
-  assert.ok(capped, 'a labelled trigger needs a width that fits a permission mode')
+  // The rule that styles both, anchored on structure. The two selectors sit on
+  // separate lines, so the pattern tolerates whitespace between them.
+  const shared = /\[class\*="_modes"\] button,\s*\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)
+  assert.ok(shared, 'both labelled triggers must share one rule, anchored on structure')
+  assert.match(shared[1], /background:\s*#fff/, 'that rule must carry the white fill')
+  assert.match(shared[1], /padding:\s*0 12px/, 'and the padding the host was overriding')
+  assert.match(shared[1], /max-width:\s*340px/, 'and a width generous enough for a permission mode')
+  assert.match(shared[1], /height:\s*var\(--pp-composer-control-size\)/, 'and the shared control height')
 
-  // The model trigger takes whatever the composer can spare.
-  const model = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)?.[1]
-  assert.ok(model, 'the model trigger must have its own rule')
-  assert.match(model, /max-width:\s*none/, 'the model trigger must not inherit a width cap')
+  // No rule may style a trigger through an attribute only one of them carries.
+  assert.doesNotMatch(css, /button\[aria-haspopup="menu"\][^{]*\{[^}]*background/,
+    'the permission trigger carries no aria-haspopup, so a menu-anchored rule misses it')
 
-  // Both keep the shared height and padding, declared once on the common rule.
-  const shared = triggers.find(block => /height:\s*var\(--pp-composer-control-size\)/.test(block))
-  assert.ok(shared !== undefined, 'the triggers must take the shared height')
-  assert.match(shared, /padding-inline:\s*12px/, 'both triggers share one padding')
-  assert.doesNotMatch(shared, /min-height/, 'no min-height on the trigger')
+  // The attach button keeps listbox and must not be caught by the white rule.
+  assert.doesNotMatch(css, /button\[aria-haspopup="listbox"\][^{]*\{[^}]*background:\s*#fff/,
+    'the attach button must keep the accent fill')
+
+  // One white fill and one white hover, shared — so the two cannot drift apart.
+  assert.equal([...css.matchAll(/background:\s*#fff/g)].length, 1, 'the white fill must be declared once')
+  const hovers = [...css.matchAll(/\[class\*="_modes"\] button:hover[^{]*\{([^}]*)\}/g)].map(m => m[1])
+  assert.ok(hovers.length > 0, 'the triggers need a hover of their own')
+  for (const block of hovers) assert.match(block, /background:\s*#ededed/)
 })
 
-test('permission and model triggers share one style', async () => {
-  // They previously diverged even though both matched the same selector: the
-  // permission button fell through to the translucent generic fill while the model
-  // one got the white. Now there is exactly one rule declaring the look, so they
-  // cannot drift apart again.
+test('the model trigger keeps its name visible and refuses to shrink', async () => {
+  // The host measures its control groups and, when they cannot share a line, sets
+  // the model text-display variable to none — the name becomes a bare icon. Its
+  // label also carries min-width:0 and overflow:hidden, so a trigger allowed to
+  // shrink renders as an empty 28px square with an icon and a chevron.
   const { css } = await featureOf('composer')
 
-  // Count the declarations that decide the fill: one solid white, one hover.
-  const fills = [...css.matchAll(/button\[aria-haspopup="menu"\][^{]*\{([^}]*)\}/g)]
-    .map(m => m[1])
-    .filter(block => /background:\s*#fff/.test(block))
-  assert.equal(fills.length, 1, `the white fill must be declared once, found ${fills.length} times`)
-  assert.match(fills[0], /color:\s*#000/, 'black content on white')
+  // Scoped past the card prefix so the *override* is matched, not the shared rule
+  // above it — both carry the slot selector, and only the override sets flex.
+  const model = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{\s*max-width:\s*none;([^}]*)\}/.exec(css)
+  assert.ok(model, 'the model trigger must override the shared width and refuse to shrink')
+  assert.match(model[1], /flex:\s*none/, 'it must refuse to shrink, or the label collapses to zero width')
 
-  // Neither may be reachable by a rule that treats them differently: no
-  // id-based or position-based styling may target one of the two alone.
-  const generic = /\[data-composer-card\] :is\(button, \[role="button"\]\)\s*\{([^}]*)\}/.exec(css)?.[1]
-  assert.ok(generic !== undefined, 'the generic control rule must exist')
-  assert.match(generic, /background:\s*var\(--pp-composer-control\)/,
-    'the generic fill must be the palette control value, so only the menu override paints white')
-
-  // The white hover must exist and be the only hover override for the triggers.
-  const hovers = [...css.matchAll(/button\[aria-haspopup="menu"\]:hover[^{]*\{([^}]*)\}/g)].map(m => m[1])
-  assert.equal(hovers.length, 1, 'the triggers share one hover')
-  assert.match(hovers[0], /background:\s*#ededed/)
+  // The label and effort spans are re-declared so the compact variable cannot win.
+  const labels = /\[class\*="triggerLabel"\][^{]*\{([^}]*)\}/.exec(css)?.[1]
+  assert.ok(labels, 'the model label must be re-declared')
+  assert.match(labels, /display:\s*inline/, 'it must stay visible in the compact mode')
+  assert.match(labels, /flex-shrink:\s*0/, 'and must stop shrinking')
 })
-
 test('every control is pinned to the row\'s vertical centre', async () => {
   // The controls sat lower than they should whenever the message list was not
   // scrolled to the bottom. The cause is vertical placement, not a transform of
@@ -223,45 +227,6 @@ test('every control is pinned to the row\'s vertical centre', async () => {
   assert.match(generic, /align-self:\s*center/, 'every control must pin its own vertical alignment')
   assert.match(generic, /transform:\s*none/,
     'the host nudges the send button with a translateY for a layout it no longer sits in')
-})
-
-test('permission and model triggers are solid white', async () => {
-  const { css } = await featureOf('composer')
-
-  // Literal white, not a palette entry — "pure white" was the instruction, and a
-  // themed near-white would drift from it. The content goes black to stay legible.
-  //
-  // Anchored on aria-haspopup of *menu*, which is what both labelled triggers carry.
-  // The attach button carries listbox, so a rule matching listbox as well would
-  // paint all four white and make the four identical — which is exactly what
-  // happened when the white rule matched both.
-  const blocks = [...css.matchAll(/button\[aria-haspopup="menu"\][^{]*\{([^}]*)\}/g)].map(m => m[1])
-  assert.ok(blocks.length > 0, 'the menu trigger rule must be locatable')
-  const white = blocks.find(block => /background:\s*#fff/.test(block))
-  assert.ok(white !== undefined, 'the labelled triggers must be solid white')
-  assert.match(white, /color:\s*#000/, 'they need black content on white')
-
-  // The attach button must NOT be caught by the white rule.
-  assert.doesNotMatch(css, /button\[aria-haspopup="listbox"\][^{]*\{[^}]*background:\s*#fff/,
-    'the attach button carries listbox and must keep the accent fill, not the white one')
-
-  // The generic hover must not win over the white pair, or they would go grey on
-  // hover while the other two stayed black.
-  const genericHover = /:is\(button, \[role="button"\]\):hover[^{]*\{([^}]*)\}/.exec(css)?.[1]
-  assert.ok(genericHover !== undefined, 'the generic control hover must exist')
-  assert.match(genericHover, /var\(--pp-composer-hover\)/, 'it should use the palette hover')
-
-  const whiteHover = [...css.matchAll(/aria-haspopup="menu"\]:hover[^{]*\{([^}]*)\}/g)].map(m => m[1])
-  assert.ok(whiteHover.length > 0, 'the white triggers need their own hover')
-  for (const block of whiteHover) assert.match(block, /background:\s*#ededed/)
-
-  // Order matters: the white rules must come after the *composer-scoped* generic
-  // ones. The dock has its own generic rules at the end of the sheet, but they are
-  // scoped to the dock's subtree and cannot reach the composer.
-  const genericIndex = css.indexOf('[data-composer-card] :is(button, [role="button"]) {')
-  const whiteIndex = css.search(/aria-haspopup="menu"\][^{]*\{[^}]*background:\s*#fff/)
-  assert.ok(genericIndex >= 0 && whiteIndex > genericIndex,
-    'the white triggers must come after the generic control rules, or they lose the cascade')
 })
 
 test('the inner control groups sit 4px apart', async () => {
