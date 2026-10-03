@@ -160,16 +160,55 @@ test('every composer control shares one height', async () => {
 })
 
 test('the model trigger is not width-capped', async () => {
-  // The model name does not fit. Cause: the host caps the trigger at a max-width
-  // in container-query units, and the plugin's own padding plus the border ate
-  // further into the content box. Dropping the cap lets the label take the room
-  // the composer can spare; the host's own ellipsis handles the overflow case.
+  // The model name does not fit. Two caps were in the way: the host's own
+  // min(360px, 45cqw) on the model trigger, and a max-width of none was needed
+  // because the trigger holds name + effort + chevron. Both hosts' labels already
+  // ellipsize, so removing the cap gives the name room before that matters.
   const { css } = await featureOf('composer')
-  const trigger = /\[data-composer-card\] button\[aria-haspopup="menu"\]\s*\{([^}]*)\}/.exec(css)?.[1]
-  assert.ok(trigger, 'the menu trigger rule must be locatable')
-  assert.match(trigger, /max-width:\s*none/, "the trigger must not inherit the host's width cap")
-  assert.match(trigger, /height:\s*var\(--pp-composer-control-size\)/, 'the trigger must take the shared height')
-  assert.doesNotMatch(trigger, /min-height/, 'no min-height on the trigger')
+
+  // The generic trigger cap is generous enough for a permission mode.
+  const triggers = [...css.matchAll(/button\[aria-haspopup="menu"\]\s*\{([^}]*)\}/g)].map(m => m[1])
+  assert.ok(triggers.length > 0, 'the trigger rule must be locatable')
+  const capped = triggers.find(block => /max-width:\s*340px/.test(block))
+  assert.ok(capped, 'a labelled trigger needs a width that fits a permission mode')
+
+  // The model trigger takes whatever the composer can spare.
+  const model = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)?.[1]
+  assert.ok(model, 'the model trigger must have its own rule')
+  assert.match(model, /max-width:\s*none/, 'the model trigger must not inherit a width cap')
+
+  // Both keep the shared height and padding, declared once on the common rule.
+  const shared = triggers.find(block => /height:\s*var\(--pp-composer-control-size\)/.test(block))
+  assert.ok(shared !== undefined, 'the triggers must take the shared height')
+  assert.match(shared, /padding-inline:\s*12px/, 'both triggers share one padding')
+  assert.doesNotMatch(shared, /min-height/, 'no min-height on the trigger')
+})
+
+test('permission and model triggers share one style', async () => {
+  // They previously diverged even though both matched the same selector: the
+  // permission button fell through to the translucent generic fill while the model
+  // one got the white. Now there is exactly one rule declaring the look, so they
+  // cannot drift apart again.
+  const { css } = await featureOf('composer')
+
+  // Count the declarations that decide the fill: one solid white, one hover.
+  const fills = [...css.matchAll(/button\[aria-haspopup="menu"\][^{]*\{([^}]*)\}/g)]
+    .map(m => m[1])
+    .filter(block => /background:\s*#fff/.test(block))
+  assert.equal(fills.length, 1, `the white fill must be declared once, found ${fills.length} times`)
+  assert.match(fills[0], /color:\s*#000/, 'black content on white')
+
+  // Neither may be reachable by a rule that treats them differently: no
+  // id-based or position-based styling may target one of the two alone.
+  const generic = /\[data-composer-card\] :is\(button, \[role="button"\]\)\s*\{([^}]*)\}/.exec(css)?.[1]
+  assert.ok(generic !== undefined, 'the generic control rule must exist')
+  assert.match(generic, /background:\s*var\(--pp-composer-control\)/,
+    'the generic fill must be the palette control value, so only the menu override paints white')
+
+  // The white hover must exist and be the only hover override for the triggers.
+  const hovers = [...css.matchAll(/button\[aria-haspopup="menu"\]:hover[^{]*\{([^}]*)\}/g)].map(m => m[1])
+  assert.equal(hovers.length, 1, 'the triggers share one hover')
+  assert.match(hovers[0], /background:\s*#ededed/)
 })
 
 test('every control is pinned to the row\'s vertical centre', async () => {

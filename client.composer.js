@@ -208,41 +208,44 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-hover);
 }
 
-/* The dropdown triggers — permission and model — carry a label plus an icon and a
-   chevron, so they are sized by their content rather than forced square.
-
-   The host sizes both at 28px tall and caps the model one at max-width of
-   min(360px, 45cqw); the cqw unit means that cap already scales with the composer
-   width. An earlier version pinned them with padding and min-height, which
-   shortened them below the buttons beside them and — because the border and padding
-   ate into the content box — left too little room for the model name.
-
-   So: height from the shared variable (the host's 28px stands), and no max-width
-   at all, so the model name gets whatever room the composer can spare. The labels
-   ellipsize when they run out, which is the host's own behaviour.
-
-   NOTE: no backticks in this comment — it lives inside a template literal. */
+/* Permission and model — one rule, so they cannot drift apart.
+ *
+   Both are solid white, black content, no shadow. "Pure white" was the
+   instruction, so the fill is a literal rather than a palette entry: a themed
+   near-white would drift from it. The permission button was previously translucent
+   because it fell through to the generic control fill, which is what made the two
+   look different even though they shared a selector.
+ *
+   Anchored on aria-haspopup of *menu*, which both labelled triggers carry. The
+   attach button carries listbox, so a rule matching listbox as well would paint
+   the "+" white too and make all three identical.
+ *
+   The width is set per trigger rather than left to the host's max-width of
+   min(360px, 45cqw): that cap is what left the model name too narrow, and the
+   host ships a 220px cap on the permission trigger that is too tight for a
+   long permission label. Each gets its own generous width instead, and both
+   ellipsize past it — which is the host's own behaviour for the labels. */
 [data-composer-card] button[aria-haspopup="menu"] {
   height: var(--pp-composer-control-size);
-  max-width: none;
-  padding-inline: 10px;
-}
-
-/* Permission and model are solid white rather than the translucent control fill,
-   so the four buttons read as two pairs: white triggers beside white square
-   buttons. The white is the literal hash-colour fff in both schemes rather than a
-   palette entry — "pure white" was the instruction, and a themed near-white would
-   drift from it. The icon and label are tinted black to keep the contrast
-   readable.
-
-   Anchored on aria-haspopup of *menu*, deliberately. The attach button carries
-   listbox, not menu, so a rule matching listbox as well would paint the "+"
-   white too and make all four buttons identical. Both labelled triggers are
-   menu. */
-[data-composer-card] button[aria-haspopup="menu"] {
+  padding-inline: 12px;
   background: #fff;
   color: #000;
   border-color: var(--pp-composer-stroke);
+}
+
+/* The two triggers share every declaration above; only the width differs, because
+   the model's label can be far longer than a permission mode's. Both hosts'
+   labels already ellipsize on their own, so a generous width simply gives them
+   room before that kicks in. */
+[data-composer-card] button[aria-haspopup="menu"] {
+  max-width: 340px;
+}
+
+/* The model trigger carries name + effort + chevron, so it takes whatever the
+   composer can spare. It is matched through its slot, not its class, because the
+   host gives it no data attribute of its own and its class name is a build hash. */
+[data-composer-card] [data-slot="conversation.input.model"] button {
+  max-width: none;
 }
 
 [data-composer-card] button[aria-haspopup="menu"]:hover:not(:disabled) {
