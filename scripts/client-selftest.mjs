@@ -602,6 +602,49 @@ test('the stub context models ctx.get, or features silently degrade to no-ops', 
     'if this is 0 the stub is hiding the feature; the feature is not the problem')
 })
 
+test('every composer control shares one height', async () => {
+  // The user reported the attach, send and model buttons sitting at a different
+  // height from the permission one. Cause: an earlier version pinned the dropdown
+  // triggers with `min-height: 26px` while the host ships 28px on all four. The
+  // send button had its own size variable too, so there were three heights.
+  const { cache } = await bootRun()
+  const { css, palette } = cache.get('client.composer.js').exports.descriptor
+
+  // One variable, declared once.
+  const sizes = [...css.matchAll(/(--pp-composer-[a-z-]*size)\s*:\s*([^;]+);/g)]
+    .map(m => m[1])
+  assert.deepEqual([...new Set(sizes)], ['--pp-composer-control-size'],
+    `every control must share one size variable; found ${sizes.join(', ')}`)
+
+  // And nothing may reintroduce a per-button height.
+  assert.doesNotMatch(css, /min-height:\s*var\(--pp-composer/,
+    'min-height on a control overrides the shared height and reintroduces the mismatch')
+  assert.doesNotMatch(css, /--pp-composer-send-size/,
+    'the send button must use the shared size, not its own')
+
+  // The host's own value is 28px on all four; assert we agree with it.
+  assert.match(css, /--pp-composer-control-size:\s*28px/,
+    'the shared control height should match the host\'s 28px')
+  void palette
+})
+
+test('the model trigger is not width-capped', async () => {
+  // The user reported the model name not fitting. Cause: the host caps the trigger
+  // at `max-width: min(360px, 45cqw)`, and the plugin's own padding plus the border
+  // ate further into the content box. Dropping the cap lets the label take the room
+  // the composer can spare; the host's own ellipsis handles the overflow case.
+  const { cache } = await bootRun()
+  const css = cache.get('client.composer.js').exports.descriptor.css
+
+  const trigger = /\[data-composer-card\] button\[aria-haspopup="menu"\]\s*\{([^}]*)\}/.exec(css)?.[1]
+  assert.ok(trigger, 'the menu trigger rule must be locatable')
+  assert.match(trigger, /max-width:\s*none/, 'the model trigger must not inherit the host\'s width cap')
+  assert.match(trigger, new RegExp(`height:\\s*var\\(--pp-composer-control-size\\)`),
+    'the trigger must take the shared height, not the host\'s own')
+  // Square controls opt out of the shared padding; the labelled ones keep theirs.
+  assert.doesNotMatch(trigger, /min-height/, 'no min-height on the trigger')
+})
+
 test('the composer palette is declared for both schemes', async () => {
   // The host's `overrideTokens` takes a `{ light, dark }` map per token and
   // recomposes it on a scheme change. That is why the composer declares both
@@ -690,12 +733,19 @@ test('the composer chunk declares no slot registration', async () => {
 })
 
 test('no bundle puts a raw backtick inside a CSS template literal', () => {
-  // Twice now a comment quoting code — `styles.insert`, `inherit`,
-  // `aria-label="发送消息"` — has closed the enclosing template literal early and
-  // turned the rest of the stylesheet into JavaScript. The symptom is a syntax
-  // error far from the cause, so it is checked directly: a CSS template literal
-  // may contain a backtick only as part of an escaped one.
+  // FOUR times now. A comment quoting code has closed the enclosing template
+  // literal early and turned the rest of the stylesheet into JavaScript:
+  // `styles.insert`, `inherit`, `aria-label="发送消息"`, `display: none`,
+  // and `max-width: min(360px, 45cqw)`. The symptom is a syntax error far from
+  // the cause — in one case a dozen unrelated tests reported "Unexpected
+  // identifier" before this one named the real file.
+  //
+  // So the check is deliberately blunt: it does not ask whether the backtick is
+  // *needed*, only whether it appears inside a CSS literal at all. Writing a
+  // backtick in that context is always a mistake here, so the rule is "never",
+  // not "be careful".
   const files = ['client.js', ...allChunkFiles()]
+  let offenders = []
   for (const file of files) {
     const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
     for (const match of source.matchAll(/const\s+(\w*CSS\w*)\s*=\s*`/g)) {
@@ -712,9 +762,55 @@ test('no bundle puts a raw backtick inside a CSS template literal', () => {
         index += 1
       }
       const body = source.slice(start, index)
-      assert.doesNotMatch(body, /`/, `${file}: ${name} contains a bare backtick — it would close the literal early`)
+      // Report the line, not just the file: the four previous failures all had to
+      // be located by hand from a filename.
+      const offendingLine = body.split('\n').findIndex(line => line.includes('`'))
+      if (offendingLine >= 0) {
+        offenders.push(
+          `${file} (${name}, ~line ${start + body.slice(0, body.split('\n').slice(0, offendingLine).join('\n').length).split('\n').length}): `
+          + body.split('\n')[offendingLine].trim().slice(0, 70),
+        )
+      }
     }
   }
+  assert.deepEqual(offenders, [],
+    `a backtick inside a CSS template literal closes it early — write the code without backticks:\n    ${offenders.join('\n    ')}`)
+})
+
+test('no CSS comment inside a stylesheet quotes code in backticks', () => {
+  // A pre-emptive narrowing of the rule above, because all four slips happened the
+  // same way: a CSS comment explaining a selector quoted the selector in backticks.
+  //
+  // Backticks in *JavaScript* comments are fine — they never cross a literal
+  // boundary — so only the body of a CSS literal is scanned. That is why this is a
+  // separate test rather than a looser version of the other one: the rule is
+  // "prose, not code" inside CSS, not "no backticks in this repository".
+  const offenders = []
+  for (const file of ['client.js', ...allChunkFiles()]) {
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
+    for (const match of source.matchAll(/const\s+(\w*CSS\w*)\s*=\s*`/g)) {
+      const start = match.index + match[0].length
+      let end = start
+      for (;;) {
+        end = source.indexOf('`', end)
+        let backslashes = 0
+        for (let i = end - 1; i >= start && source[i] === '\\'; i -= 1) backslashes += 1
+        if (backslashes % 2 === 0) break
+        end += 1
+      }
+      const body = source.slice(start, end)
+      // Only comments matter — a backtick in actual CSS would be a syntax error
+      // caught by the test above anyway.
+      for (const comment of body.matchAll(/\/\*([\s\S]*?)\*\//g)) {
+        if (!comment[1].includes('`')) continue
+        const line = body.slice(0, comment.index).split('\n').length
+        const text = comment[1].split('\n').find(l => l.includes('`')).trim()
+        offenders.push(`${file} ${match[1]} ~line ${line}: ${text.slice(0, 66)}`)
+      }
+    }
+  }
+  assert.deepEqual(offenders, [],
+    `backticks inside a CSS comment end the template literal — describe the code in prose:\n    ${offenders.join('\n    ')}`)
 })
 
 test('every bundle parses as JavaScript on its own', () => {

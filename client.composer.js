@@ -84,8 +84,11 @@ window.__ModuleLoader__.load({
 [data-composer-card] {
   --pp-composer-block-gap: 4px;
   --pp-composer-inset: 10px;
-  --pp-composer-control-size: 26px;
-  --pp-composer-send-size: 28px;
+  /* One height for every control. The host ships 28px on the attach button, the
+     send button and both dropdown triggers alike; an earlier version set the
+     triggers to 26px through min-height, which is what made them sit visibly
+     shorter than the buttons beside them. */
+  --pp-composer-control-size: 28px;
 
   background: transparent;
   box-shadow: none;
@@ -151,15 +154,28 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-hover);
 }
 
-/* The host fixes the attach button at 28x28 and the send button at 34x34, and the
-   send button additionally carries a translateY(-2px) nudge tuned for a layout it
-   no longer sits in. */
+/* The dropdown triggers — permission and model — carry a label plus an icon and a
+   chevron, so they are sized by their content rather than forced square.
+
+   The host sizes both at 28px tall and caps the model one at max-width of
+   min(360px, 45cqw); the cqw unit means that cap already scales with the composer
+   width. An earlier version pinned them with padding and min-height, which
+   shortened them below the buttons beside them and — because the border and padding
+   ate into the content box — left too little room for the model name.
+
+   So: height from the shared variable (the host's 28px stands), and no max-width
+   at all, so the model name gets whatever room the composer can spare. The labels
+   ellipsize when they run out, which is the host's own behaviour.
+
+   NOTE: no backticks in this comment — it lives inside a template literal. */
 [data-composer-card] button[aria-haspopup="listbox"],
 [data-composer-card] button[aria-haspopup="menu"] {
-  padding: 4px 10px;
-  min-height: var(--pp-composer-control-size);
+  height: var(--pp-composer-control-size);
+  max-width: none;
+  padding-inline: 10px;
 }
 
+/* Square controls: attach (the "+" beside the hidden file input) and send. */
 [data-composer-card] button[aria-haspopup="listbox"] ~ button,
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
   width: var(--pp-composer-control-size);
@@ -194,12 +210,13 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-accent-hover);
 }
 
-/* Send: the last button of the trailing group, whatever the activity slot is doing. */
+/* Send: the last button of the trailing group, whatever the activity slot is doing.
+   Square, like attach, and the same 28px as every other control. */
 [data-composer-card] [class*="_trailing"] button:last-of-type {
   background: var(--pp-composer-accent);
   color: var(--pp-composer-surface);
-  width: var(--pp-composer-send-size);
-  height: var(--pp-composer-send-size);
+  width: var(--pp-composer-control-size);
+  height: var(--pp-composer-control-size);
   padding: 0;
 }
 
