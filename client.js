@@ -50,6 +50,7 @@ window.__ModuleLoader__.load({
       './client.core.js',
       './client.font.js',
       './client.shape.js',
+      './client.composer.js',
     ]
 
     // ── page chrome ────────────────────────────────────────────────────────────

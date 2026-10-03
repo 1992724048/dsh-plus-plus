@@ -27,6 +27,30 @@ const test = (name, fn) => tests.push([name, fn])
 
 // ── harness ──────────────────────────────────────────────────────────────────
 
+/** Every chunk file on disk, core included, sorted. */
+function allChunkFiles() {
+  return fs.readdirSync(ROOT).filter(name => /^client\..*\.js$/.test(name)).sort()
+}
+
+/** The chunk files that declare a feature — i.e. everything but the core. */
+function featureChunkFiles() {
+  return allChunkFiles().filter(name => name !== 'client.core.js')
+}
+
+/**
+ * The chunk specifiers `client.js` lists, in declaration order.
+ *
+ * Read from the source rather than restated here, so adding a chunk cannot leave
+ * this file asserting a stale list — which is exactly the drift the
+ * "chunks on disk match what the entry requires" test exists to catch.
+ */
+function expectedChunkOrder() {
+  const source = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8')
+  const block = /const CHUNKS = \[([\s\S]*?)\]/.exec(source)
+  assert.ok(block, 'CHUNKS must be locatable in client.js')
+  return [...block[1].matchAll(/'([^']+)'/g)].map(m => m[1])
+}
+
 /**
  * Evaluate one bundle in a fresh realm and return its registration.
  *
@@ -214,7 +238,8 @@ test('apply() runs to completion, as the shell requires at boot', async () => {
   // say it anyway so a failure names the cause.
   const result = await bootRun()
   assert.ok(result.stub.effects.length > 0, 'apply must install at least one effect')
-  assert.equal(result.cache.size, 3, 'all three chunks must have loaded')
+  assert.equal(result.cache.size, allChunkFiles().length,
+    'every chunk file must load — one per feature, plus the core')
 })
 
 test('chunks are reached through require.async, never the synchronous require', async () => {
@@ -236,9 +261,10 @@ test('chunks are reached through require.async, never the synchronous require', 
   // for core again, which is already materialized by then — so those repeats must
   // be cache hits, not new fetches. Assert first-occurrence order and the count.
   const asyncSpecs = requireImpl.calls.filter(call => call.kind === 'async').map(call => call.spec)
-  assert.deepEqual([...new Set(asyncSpecs)], ['./client.core.js', './client.font.js', './client.shape.js'],
+  assert.deepEqual([...new Set(asyncSpecs)], expectedChunkOrder(),
     'chunks must be fetched through require.async, in declaration order')
-  assert.equal(cache.size, 3, 'core must be materialized exactly once despite the repeat requests')
+  assert.equal(cache.size, allChunkFiles().length,
+    'core must be materialized exactly once despite the repeat requests each feature makes')
 })
 
 test('every chunk name in CHUNKS is relative and matches the chunk rule', async () => {
@@ -259,7 +285,7 @@ test('no chunk uses the synchronous require to reach the core', async () => {
   // The feature chunks were the second place this went wrong: they each did
   // `require('dsh-plus-plus/client.core.js')` at factory time, which is the same
   // miss. They must go through `require.async` too.
-  for (const file of ['client.font.js', 'client.shape.js']) {
+  for (const file of featureChunkFiles()) {
     const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/(^|[^:])\/\/.*$/gm, '$1')
@@ -276,7 +302,7 @@ test('the bundle references no free variable the loader does not provide', () =>
   //
   // Comments are stripped first: prose like "served by the host" would otherwise
   // match `host.` and fail a test about code.
-  const files = ['client.js', 'client.core.js', 'client.font.js', 'client.shape.js']
+  const files = ['client.js', ...allChunkFiles()]
   for (const file of files) {
     const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -308,19 +334,27 @@ test('the bundle patch registers exactly one row, on the bare package name', () 
 })
 
 test('every chunk filename satisfies the loader naming rule', () => {
-  for (const file of fs.readdirSync(ROOT).filter(name => /^client\..*\.js$/.test(name))) {
+  for (const file of allChunkFiles()) {
     assert.match(file, CLIENT_CHUNK, `${file} is not a valid client chunk name`)
   }
 })
 
 test('the entry requires exactly the chunks that exist on disk', async () => {
-  const { requireImpl, cache } = await bootRun()
+  const { cache } = await bootRun()
   const required = [...cache.keys()].sort()
-  const onDisk = fs.readdirSync(ROOT).filter(name => /^client\..*\.js$/.test(name)).sort()
+  const onDisk = allChunkFiles()
   assert.deepEqual(required, onDisk,
     'a chunk on disk that nothing requires is dead code; a required chunk that is missing will not load')
-  // Every required chunk must have resolved to something.
   for (const [file, entry] of cache) assert.ok(entry.exports, `${file} resolved to nothing`)
+  // And the declared order must match, not just the set: core first, then the
+  // features. Compared by content so the assertion does not encode a sort order.
+  const declared = expectedChunkOrder()
+  assert.equal(declared[0], './client.core.js', 'the core chunk must load first')
+  assert.deepEqual(
+    declared.slice(1).map(name => name.slice('./'.length)).sort(),
+    featureChunkFiles(),
+    'CHUNKS must list every feature chunk exactly once, after the core',
+  )
 })
 
 test('core is loaded once and is a singleton across chunks', async () => {
@@ -485,6 +519,86 @@ test('the hardcoded-length sweep wins over class rules but spares the round ones
   for (const [, selector, value] of rules) {
     assert.match(selector, /\[style\*="corner-shape"\]|\.pp-dot/, `unexpected corner-shape rule on ${selector.trim()}`)
     if (value === 'round') assert.match(selector, /\.pp-dot/, 'only the demo dot may stay round')
+  }
+})
+
+test('the composer chunk restyles without taking over the composer slot', async () => {
+  // The composer's host slot is `conversation.composer.bar`, a `single` seat whose
+  // `replaceRisk` is `shadows-shipped-ui`. Registering there would replace the
+  // editor outright — paste, @-mention, slash commands, attachment, IME
+  // composition and voice input all included. Nothing here may register a slot.
+  const { cache } = await bootRun()
+  const composer = cache.get('client.composer.js').exports
+  const feature = cache.get('client.core.js').exports.listFeatures()
+    .find(entry => entry.id === 'composer')
+  assert.ok(feature, 'the composer feature must be declared')
+
+  const css = feature.css
+  // It must key off the host's stable data attributes, never its build-scoped
+  // hash class names — those change every release and silently stop matching.
+  assert.match(css, /\[data-composer-card\]/, 'must anchor on data-composer-card')
+  assert.match(css, /\[data-input-scroll\]/, 'must anchor on data-input-scroll')
+  assert.doesNotMatch(css, /\.RlGAzG/, 'must not hard-code a build-scoped host class name')
+
+  // The two blocks the mock-up asks for.
+  assert.match(css, /--pp-composer-surface:\s*rgb\(0 0 0 \/ 80%\)/, 'editor surface is 80% black')
+  assert.match(css, /backdrop-filter:\s*blur\(/, 'editor surface must be blurred')
+  assert.match(css, /--pp-composer-control-fill:\s*#fff/, 'attach and send sit on white')
+  // Every control borderless.
+  assert.match(css, /\[data-composer-card\][^{]*\{[^}]*border:\s*0/, 'controls must be borderless')
+  void composer
+})
+
+test('the composer chunk declares no slot registration', async () => {
+  // Re-read the source rather than the descriptor: `apply` is opaque until run, and
+  // the failure mode being guarded (silently replacing the editor) must be caught by
+  // inspection, not by whatever `apply` happens to do with a stub context.
+  const source = fs.readFileSync(path.join(ROOT, 'client.composer.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+  assert.doesNotMatch(source, /slots\s*\.\s*(register|inject)\s*\(/,
+    'the composer chunk must not register any slot — it only restyles')
+  assert.doesNotMatch(source, /conversation\.composer\.bar/,
+    'referencing the composer bar slot at all would invite a replacement')
+})
+
+test('no bundle puts a raw backtick inside a CSS template literal', () => {
+  // Twice now a comment quoting code — `styles.insert`, `inherit`,
+  // `aria-label="发送消息"` — has closed the enclosing template literal early and
+  // turned the rest of the stylesheet into JavaScript. The symptom is a syntax
+  // error far from the cause, so it is checked directly: a CSS template literal
+  // may contain a backtick only as part of an escaped one.
+  const files = ['client.js', ...allChunkFiles()]
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
+    for (const match of source.matchAll(/const\s+(\w*CSS\w*)\s*=\s*`/g)) {
+      const name = match[1]
+      const start = match.index + match[0].length
+      // Walk the literal to its true end, honouring escapes.
+      let index = start
+      for (;;) {
+        index = source.indexOf('`', index)
+        assert.ok(index >= 0, `${file}: ${name} has an unterminated template literal`)
+        let backslashes = 0
+        for (let i = index - 1; i >= start && source[i] === '\\'; i -= 1) backslashes += 1
+        if (backslashes % 2 === 0) break
+        index += 1
+      }
+      const body = source.slice(start, index)
+      assert.doesNotMatch(body, /`/, `${file}: ${name} contains a bare backtick — it would close the literal early`)
+    }
+  }
+})
+
+test('every bundle parses as JavaScript on its own', () => {
+  // Catches what the walk above cannot: a CSS block that never became a literal at
+  // all, or any other stray edit. `compileFunction` parses without executing.
+  for (const file of ['client.js', ...allChunkFiles()]) {
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
+    // `compileFunction(source, params, …)` — the params argument must be an array;
+    // the filename is the trailing options object.
+    assert.doesNotThrow(() => vm.compileFunction(source, [], { filename: file }),
+      `${file} does not parse`)
   }
 })
 

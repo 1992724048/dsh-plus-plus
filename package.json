@@ -15,7 +15,8 @@
     "test": "node scripts/test-all.mjs",
     "selftest": "node scripts/host-selftest.mjs",
     "probe:client": "node scripts/probe-client.mjs",
-    "probe:install": "node scripts/probe-install.mjs"
+    "probe:install": "node scripts/probe-install.mjs",
+    "check:selectors": "node scripts/check-composer-selectors.mjs"
   },
   "files": [
     "index.js",
@@ -30,7 +31,8 @@
     "dsh",
     "dsh-plugin",
     "font",
-    "theme"
+    "theme",
+    "composer"
   ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

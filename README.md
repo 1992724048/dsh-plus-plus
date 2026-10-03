@@ -26,6 +26,8 @@ client.js          入口：加载 chunk、绑定 locale、渲染设置页骨架
 client.core.js     公共层：功能注册表、样式表注入、双语字典校验
 client.font.js     功能：字体栈
 client.shape.js    功能：直角化
+client.composer.js 功能：输入框布局
+composer-dom.html  从宿主抓的输入框 DOM 样本，供选择器校验用
 src/fonts.js       宿主：字体路由
 index.js           宿主入口
 scripts/           自测与探针
@@ -156,10 +158,46 @@ base64 这些字体。宿主因此用一条 `prefix` 路由 `/api/dsh-plus-plus/
 - 路径包含 `..` 或 NUL 直接 400，不做规范化——`%2e%2e` 会漏过
 - 解析后再校验绝对路径仍位于包根之内
 
+## 已实现：输入框改造
+
+编辑区与工具行分成两块，编辑区半透明毛玻璃，按钮全部无边框——附件与发送白底，
+其余沿用编辑区底色。
+
+**纯 CSS，没有接管 DOM。** 输入框的宿主插槽 `conversation.composer.bar` 是 `single`
+位，`replaceRisk` 标着 `shadows-shipped-ui`：注册进去会顶掉整个编辑器，连粘贴、
+`@` 提及、斜杠命令、附件拖放、输入法组合、语音输入一起没。图里的效果全靠改样式就
+能拿到，所以不注册任何插槽。自测里有一条专门断言它不注册。
+
+### 选择器锚在 data 属性上，不锚类名
+
+宿主的类名是**按构建 hash 生成的**（`.RlGAzG_row`、`.wq12jW_trigger`），每次发版都会变，
+写死会静默失配。它同时暴露了稳定属性——`data-composer-card`、`data-input-scroll`、
+`data-composer-input`、`data-composer-placeholder`——这份样式表锚在这些上面。
+
+只有两处不得不碰类名（`[class*="_row"]`、`[class*="_dock"]`），因为宿主没给它们
+data 属性；两处都带了结构限定，不会误伤别的元素。
+
+`composer-dom.html` 是从宿主抓的 DOM 样本，`npm run check:selectors` 拿它校验每条
+选择器都指向真实存在的节点。壳更新后重新抓一份即可。
+
+### 不按本地化文案选择元素
+
+发送按钮最顺手的锚点是它的 `aria-label`，但**那是本地化的**——英文界面下选择器一条都
+匹配不上，按钮会悄悄丢掉白底。所以改用结构：`conversation.input.activity` 插槽紧挨
+在发送按钮前面，「该插槽之后的按钮」在任何语言下都是发送。
+
+### 两条永久防线
+
+- **CSS 模板串里不许有裸反引号。** 这个坑踩了两次，都会提前终止模板串、把后面整段
+  CSS 当成 JS 解析，报错位置离原因很远。现在有断言逐个走查每个 `const xCSS = \`` 的
+  真实边界。
+- **每个 bundle 单独可解析。** `vm.compileFunction` 只解析不执行，兜住上面那条抓不到的。
+
 ## 开发
 
 ```bash
 npm test
+npm run check:selectors
 ```
 
 30 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
