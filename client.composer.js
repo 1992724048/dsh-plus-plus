@@ -268,14 +268,29 @@ window.__ModuleLoader__.load({
   min-width: 0;
 }
 
-/* The host's compact-mode text hiding, spelled out so it survives our own
- * overrides. The label and effort spans read this variable; the icon reads the
-   matching icon-display one. Re-declaring the variable here keeps the pair
- * consistent — the row sets only the text half, so without this the icon would
-   never appear in compact mode. */
-[data-composer-card] [data-slot="conversation.input.model"] button {
+/* Keep the model name and effort visible; the icon stays hidden.
+ *
+ * Declared on the **row**, which is where the host sets it. The row carries the
+ * compact-mode variable and the label and effort spans inherit it from there; an
+ * earlier version declared the same pair on the button, which sits *below* the row
+ * in the inheritance chain, so the row's own none value won and the declaration did
+ * nothing — the name stayed hidden and the button rendered as a bare icon.
+ *
+ * The labels' own flex value is what actually keeps the name on screen. The host
+ * gives them flex-shrink of 1000, so they reach zero width far faster than the
+ * icon or the chevron keep their size — which is exactly the bare-square result.
+ *
+ * The button keeps min-width:0, so the trigger as a whole may still shrink if the
+ * row genuinely has no room, and the row wraps. That is the host's own fallback,
+ * left intact rather than fought. */
+[data-composer-card] [class*="_row"] {
   --dsh-composer-model-text-display: block;
   --dsh-composer-model-icon-display: none;
+}
+
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerLabel"],
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"] {
+  flex: 0 0 auto;
 }
 
 [data-composer-card] [class*="_modes"] button:hover:not(:disabled),

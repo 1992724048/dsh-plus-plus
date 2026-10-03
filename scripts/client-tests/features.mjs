@@ -224,14 +224,24 @@ test('the model trigger may shrink, and clips what does not fit', async () => {
     'the trigger must clip; without it the text runs outside the button')
 
   // The host's compact-mode pair stays intact, so the fallback can still engage.
-  const compact = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
-  const vars = [...css.matchAll(/--dsh-composer-model-(text|icon)-display:\s*(\w+)/g)]
-    .map(m => [m[1], m[2]])
-  const text = vars.find(([name]) => name === 'text')?.[1]
-  const icon = vars.find(([name]) => name === 'icon')?.[1]
-  assert.equal(text, 'block', 'the name must be shown by default')
-  assert.equal(icon, 'none', 'and the icon hidden, so the host can swap them')
-  void compact
+  //
+  // Declared on the row, not on the button: the row is where the host sets the
+  // variable and the labels inherit from there. An earlier version declared it on
+  // the button, which sits below the row in the inheritance chain, so the row's
+  // value won and the name stayed hidden — a declaration that did nothing.
+  const onRow = /\[data-composer-card\] \[class\*="_row"\]\s*\{([^}]*)\}/
+  const row = onRow.exec(css)
+  assert.ok(row !== undefined, 'the row rule must exist')
+  assert.match(row[1], /--dsh-composer-model-text-display:\s*block/,
+    'the row must show the name — this is the declaration that actually reaches the labels')
+  assert.match(row[1], /--dsh-composer-model-icon-display:\s*none/, 'and hide the icon')
+
+  // The labels' own shrink rate is the other half: the host gives them
+  // flex-shrink of 1000, so they hit zero width long before the icon and chevron.
+  const labels = /\[class\*="triggerLabel"\][^{]*\{([^}]*)\}/.exec(css)?.[1]
+  assert.ok(labels, 'the model label must be re-declared')
+  assert.match(labels, /flex:\s*0 0 auto/,
+    'the label must stop shrinking a thousand times faster than the icon')
 })
 
 test('every control is pinned to the row\'s vertical centre', async () => {
