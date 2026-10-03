@@ -17,6 +17,14 @@ window.__ModuleLoader__.load({
     /** Route prefix served by the host. Must match `FONT_ROUTE` in src/fonts.js. */
     const FONT_ROUTE = '/api/dsh-plus-plus/fonts'
 
+    /**
+     * This package's name.
+     *
+     * Used as the prefix of every palette layer's `source`, so each feature gets its
+     * own layer — see {@link applyPalette}.
+     */
+    const PACKAGE = 'dsh-plus-plus'
+
     // ── feature registry ───────────────────────────────────────────────────────
     /**
      * The one place a feature is declared.
@@ -123,31 +131,71 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The palettes applied so far, as one merged map per source prefix.
+     *
+     * The host stores overrides in a `Map<source, layer>`: calling
+     * `overrideTokens` with a source it already holds **replaces that source's whole
+     * layer** rather than merging into it. So one source can carry exactly one
+     * layer, and two features sharing a source would silently erase each other —
+     * the second to apply wins and the first one's tokens stop resolving, taking
+     * its stylesheet's backgrounds and borders with them.
+     *
+     * That is not hypothetical: the surface chunk re-pointed the host's
+     * `--dsw-alias-bg-base`, which wiped the composer chunk's palette and left the
+     * input box and its buttons with no background and no border at all.
+     *
+     * The fix is a `source` per feature — the host pins the prefix to this package,
+     * so only the suffix is ours to choose — plus a per-source registry so a hot
+     * reload replaces one feature's layer instead of stacking a second one.
+     */
+    const paletteLayers = new Map()
+
+    /**
      * Apply one feature's palette as a host token layer.
      *
      * `theme.overrideTokens(source, tokens)` takes a `{ light, dark }` map per token
-     * and recomposes it whenever the scheme changes — which is the host's own
-     * light/dark mechanism, so a feature declares both schemes once and never has
-     * to know how the shell scopes its themes.
+     * and recomposes it whenever the scheme changes — the host's own light/dark
+     * mechanism, so a feature declares both schemes once and never has to know how
+     * the shell scopes its themes.
      *
-     * It is idempotent by contract: "calling again with the same source replaces
-     * that source's whole layer and restacks it on top", so a hot reload that
-     * applies the plugin again does not stack duplicates. `source` is pinned to
-     * this package by the host's façade, so passing `label` is only for readability.
+     * Idempotent per feature: calling twice for the same `label` releases the
+     * previous layer first, so a hot reload that re-applies the plugin replaces
+     * rather than accumulates.
      *
      * Returns a no-op when the `theme` service is absent, so a feature with a
      * palette still loads on a composition without themes rather than failing.
+     *
+     * @param {object} ctx Client context.
+     * @param {object} palette `{ token: { light, dark } }`.
+     * @param {string} label Feature id; becomes this feature's layer identity.
+     * @returns {() => void} Disposer for this feature's layer only.
      */
     function applyPalette(ctx, palette, label) {
       const theme = ctx.get?.('theme')
       if (!theme?.overrideTokens || palette === undefined) return () => {}
-      const dispose = theme.overrideTokens('dsh-plus-plus', palette)
-      void label
-      return typeof dispose === 'function' ? dispose : () => {}
+      if (typeof label !== 'string' || label === '') {
+        throw new Error('core: applyPalette needs a feature label — it is the layer identity')
+      }
+
+      // A reload of the same feature replaces its own layer and nothing else.
+      const previous = paletteLayers.get(label)
+      if (previous !== undefined) {
+        try { previous() } catch { /* the layer is already gone */ }
+        paletteLayers.delete(label)
+      }
+
+      const dispose = theme.overrideTokens(`${PACKAGE}.${label}`, palette)
+      const release = () => {
+        if (paletteLayers.get(label) !== release) return
+        paletteLayers.delete(label)
+        if (typeof dispose === 'function') dispose()
+      }
+      paletteLayers.set(label, release)
+      return release
     }
 
     exports.id = 'dsh-plus-plus/client.core.js'
-    exports.PACKAGE = 'dsh-plus-plus'
+    exports.PACKAGE = PACKAGE
     exports.FONT_ROUTE = FONT_ROUTE
     exports.features = features
     exports.defineFeature = defineFeature

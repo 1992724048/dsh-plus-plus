@@ -75,6 +75,39 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The composer's seat in the scroller.
+     *
+     * Found from a console dump of the live DOM: the host pins the composer to the
+     * bottom of the scroll area with `position: sticky; bottom: 0; z-index: 7` and
+     * lays a 36px gradient over the top of it, fading from transparent into the
+     * **opaque** conversation background:
+     *
+     *     linear-gradient(180deg,
+     *       color-mix(in srgb, var(--dsw-alias-bg-base) 0%, transparent) 0px,
+     *       var(--dsw-alias-bg-base) 36px)
+     *
+     * That opaque wash is what made message text look "covered": the last 36px of
+     * every message was swallowed by solid chat colour as it scrolled past.
+     *
+     * The fade itself is kept — it is what stops text colliding with the composer's
+     * top edge — but it now runs to transparent instead of to the chat background, so
+     * text scrolls *through* it and stays legible right up to the composer.
+     *
+     * The seat is matched on its readable class suffix rather than the build hash,
+     * the same way the row and dock are matched above. It is the one place this
+     * stylesheet depends on a host class name, because the host gives the seat no
+     * `data-` attribute of its own.
+     *
+     * `!important` is required: the host's own rule is a compound class selector, and
+     * nothing at class level outranks it without one.
+     */
+    const SEAT_CSS = `
+[class*="composerSeat"] {
+  background: linear-gradient(180deg, rgb(0 0 0 / 0%) 0px, rgb(0 0 0 / 0%) var(--pp-composer-seat-fade, 36px)) !important;
+}
+`.trim()
+
+    /**
      * The composer restyle.
      *
      * The card stops being a surface — its own opaque background is dropped — so the
@@ -126,15 +159,23 @@ window.__ModuleLoader__.load({
 
 /* ── the tool row ───────────────────────────────────────────────────────────── */
 
-/* Not a surface: the row is only a positioning context with a gutter between the
-   per-control blocks. */
+/* Not a surface: the row is only a positioning context holding the blocks apart.
+   Its own gap is left alone — the tighter spacing the user asked for is applied to
+   the two inner groups below, which is where those pairs actually sit. */
 [data-composer-card] > [data-input-scroll] ~ [class*="_row"] {
   background: transparent;
   border: 0;
   margin-inline: var(--pp-composer-inset);
   border-radius: 0;
   padding: 0;
-  gap: 8px;
+}
+
+/* The host ships 12px inside these groups, dropping to 8px under a 560px
+   container query. Both pairs the user named sit inside one of them — attach and
+   permission in the leading group, model and send in the trailing one — so the gap
+   is set here. 4px makes the blocks read as neighbours rather than a toolbar. */
+[data-composer-card] :is([class*="_tools"], [class*="_modes"], [class*="_standardControls"]) {
+  gap: 4px;
 }
 
 /* ── controls ───────────────────────────────────────────────────────────────── */
@@ -173,6 +214,24 @@ window.__ModuleLoader__.load({
   height: var(--pp-composer-control-size);
   max-width: none;
   padding-inline: 10px;
+}
+
+/* Permission and model are solid white rather than the translucent control fill,
+   so the four buttons read as two pairs: white triggers beside white square
+   buttons. The white is the literal hash-colour fff in both schemes rather than a
+   palette entry — "pure white" was the instruction, and a themed near-white would
+   drift from it. The icon and label are tinted black to keep the contrast
+   readable. */
+[data-composer-card] button[aria-haspopup="listbox"],
+[data-composer-card] button[aria-haspopup="menu"] {
+  background: #fff;
+  color: #000;
+  border-color: var(--pp-composer-stroke);
+}
+
+[data-composer-card] button[aria-haspopup="listbox"]:hover:not(:disabled),
+[data-composer-card] button[aria-haspopup="menu"]:hover:not(:disabled) {
+  background: #ededed;
 }
 
 /* Square controls: attach (the "+" beside the hidden file input) and send. */
@@ -277,6 +336,10 @@ window.__ModuleLoader__.load({
       order: 30,
       locale: DICT,
       css: CSS,
+      // Concatenated into the one stylesheet rather than registered separately: the
+      // seat rule needs the card's fade variable to resolve, and two style tags
+      // would make that depend on insertion order for no benefit.
+      seatCss: SEAT_CSS,
       palette: PALETTE,
       title: 'composer.title',
       settings: Settings,
@@ -286,7 +349,7 @@ window.__ModuleLoader__.load({
         // The palette first, so the stylesheet's var() references resolve against
         // real values on the frame they are first used.
         applyPalette(ctx, PALETTE, 'composer')
-        registerStyles(ctx, CSS, 'composer')
+        registerStyles(ctx, `${CSS}\n${SEAT_CSS}`, 'composer')
       },
     }
     return module.exports
