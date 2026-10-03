@@ -21,7 +21,8 @@
     "watch": "node scripts/watch-chunks.mjs",
     "sync:entry": "node scripts/watch-chunks.mjs --once",
     "check:css": "node scripts/check-css-literals.mjs",
-    "lint:css": "node scripts/check-css-literals.mjs"
+    "check:host": "node scripts/check-host.mjs",
+    "lint": "node scripts/check-css-literals.mjs && node scripts/check-host.mjs"
   },
   "files": [
     "index.js",

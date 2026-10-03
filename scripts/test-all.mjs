@@ -10,9 +10,10 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const STEPS = [
-  // First, because it is the cheapest and the mistake it catches is the one that
-  // turns every later step into a syntax error.
+  // Both linters first: they are cheap, and each catches a mistake that would
+  // otherwise turn every later step into an unrelated-looking failure.
   ['css literal check', 'check-css-literals.mjs'],
+  ['host lint', 'check-host.mjs'],
   ['host selftest', 'host-selftest.mjs'],
   ['client selftest', 'client-selftest.mjs'],
 ]

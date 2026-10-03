@@ -1,37 +1,50 @@
 #!/bin/sh
 #
-# Pre-commit guard: reject a stray backtick inside a CSS template literal.
+# Pre-commit guard for the two lint checks.
 #
-# A CSS sheet is a JavaScript template literal, and a backtick in one closes it
-# early — the rest of the stylesheet is then read as JavaScript and the bundle
-# stops parsing. That mistake landed ten times in this repository, each time
-# surfacing far from the cause, and the test suite only caught it after the edit
-# was already written. This runs before the commit, so it never lands.
+# 1. A stray backtick inside a CSS template literal closes it early; the rest of
+#    the stylesheet is then read as JavaScript and the bundle stops parsing. That
+#    landed ten times in this repository, each time surfacing far from the cause.
+# 2. The host half is plain ESM, parsed only when something imports it, so a file
+#    nothing currently reaches stays broken unnoticed.
 #
-# The logic lives in scripts/check-css-literals.mjs so it can also run on its own
-# and as the first step of `npm test`; this hook only wires it up.
+# The logic lives in scripts/ so both can also run on their own and as early steps
+# of `npm test`; this hook only wires them up.
 #
 # Enabled with:  git config core.hooksPath .githooks
 
-set -e
-
 repo_root=$(git rev-parse --show-toplevel)
-cd "$repo_root"
+cd "$repo_root" || exit 1
 
-if [ ! -f scripts/check-css-literals.mjs ]; then
-  echo "pre-commit: scripts/check-css-literals.mjs is missing; skipping" >&2
+# Nothing staged that a check looks at? Then there is nothing to catch.
+staged=$(git diff --cached --name-only -- 'client*.js' 'src/*.js' 'src/**/*.js' 'index.js')
+if [ -z "$staged" ]; then
   exit 0
 fi
 
-# Nothing staged from the bundles? Then there is nothing this can catch.
-if ! git diff --cached --name-only -- 'client*.js' | grep -q .; then
-  exit 0
+failed=0
+
+if [ -f scripts/check-css-literals.mjs ] \
+   && git diff --cached --name-only -- 'client*.js' | grep -q .; then
+  if ! node scripts/check-css-literals.mjs; then
+    echo "" >&2
+    echo "commit aborted: describe CSS in prose instead of quoting it." >&2
+    failed=1
+  fi
 fi
 
-if ! node scripts/check-css-literals.mjs; then
+if [ -f scripts/check-host.mjs ]; then
+  if ! node scripts/check-host.mjs; then
+    echo "" >&2
+    echo "commit aborted: fix the host half, or stage nothing from it if the change" >&2
+    echo "was incomplete." >&2
+    failed=1
+  fi
+fi
+
+if [ "$failed" -ne 0 ]; then
   echo "" >&2
-  echo "commit aborted. Fix the stylesheet comments above — describe CSS in prose" >&2
-  echo "instead of quoting it — then commit again." >&2
+  echo "commit aborted. Fix the above, then commit again." >&2
   exit 1
 fi
 
