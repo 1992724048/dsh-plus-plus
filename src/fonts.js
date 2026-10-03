@@ -115,7 +115,40 @@ function ensureRoots() {
 }
 
 /**
+ * Registrations we own, keyed by the server that holds them.
+ *
+ * `webServer.register` throws on a duplicate `(kind, path)` — route patterns are a
+ * composition-level contract, so a second registration is a hard error, not a
+ * no-op. That makes a naive `apply` non-idempotent, which `dsh-hmr` exposes: saving
+ * a watched file disposes the old fiber and applies the plugin again, and if the new
+ * fiber lands before the old disposer runs, the second `register` throws and the
+ * entry fails to activate.
+ *
+ * A WeakMap keyed on the server instance fixes it without weakening the contract:
+ * the route is registered once *per server*, every later `apply` against that same
+ * server reuses the registration, and a different server (a different composition,
+ * or the same one rebuilt) registers its own. Using the server as the key rather
+ * than a module-level flag matters — a plain module-level binding would leak the
+ * registration from one server into the next.
+ *
+ * A hot reload replaces the module, which replaces this map, so the reloaded
+ * instance starts empty and consults the server's own duplicate guard — that is
+ * what {@link isDuplicateRoute} is for.
+ */
+const registrations = new WeakMap()
+
+/**
  * Install the font route on a context.
+ *
+ * Idempotent per server: a second `apply` against the same `webServer` reuses the
+ * live registration instead of asking for another.
+ *
+ * Ownership is reference-counted, and that is the point. Two fibers can legitimately
+ * hold this route at once — `dsh-hmr` applies the reloaded plugin before the old
+ * fiber's disposer has run — and whichever disposes first must not pull the route out
+ * from under the other. The count therefore only releases the registration when the
+ * last holder lets go. Each disposer is also individually idempotent, so a fiber torn
+ * down twice cannot double-decrement.
  *
  * @param {object} deps
  * @param {object} deps.ctx Cordis context.
@@ -125,12 +158,48 @@ export function installFontRoutes({ ctx }) {
   const webServer = ctx.get?.('webServer')
   if (!webServer?.register) return () => {}
 
-  const dispose = webServer.register({
-    kind: 'prefix',
-    path: FONT_ROUTE,
-    handler: serve,
-  })
-  return typeof dispose === 'function' ? dispose : () => {}
+  let entry = registrations.get(webServer)
+  if (entry === undefined) {
+    try {
+      entry = {
+        holders: 1,
+        owned: true,
+        dispose: webServer.register({ kind: 'prefix', path: FONT_ROUTE, handler: serve }),
+      }
+    } catch (error) {
+      // Another instance of this module already owns the route on this server — a
+      // hot reload whose previous instance has not been torn down yet. Adopting it
+      // is correct; failing the entry is not. Adoption does not own the disposer, so
+      // the last holder to leave still lets the original owner release it.
+      if (!isDuplicateRoute(error)) throw error
+      entry = { holders: 1, owned: false, dispose: ADOPTED }
+    }
+    registrations.set(webServer, entry)
+  } else {
+    entry.holders += 1
+  }
+
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    const current = registrations.get(webServer)
+    if (current !== entry) return
+    entry.holders -= 1
+    if (entry.holders > 0) return
+    registrations.delete(webServer)
+    if (entry.owned && typeof entry.dispose === 'function') entry.dispose()
+  }
+}
+
+/** Stands in for a route this instance did not register, so it does not release it. */
+const ADOPTED = () => {}
+
+/** True when the failure is `webServer`'s duplicate guard on this exact route. */
+function isDuplicateRoute(error) {
+  return typeof error?.message === 'string'
+    && error.message.includes('duplicate')
+    && error.message.includes(FONT_ROUTE)
 }
 
 /**

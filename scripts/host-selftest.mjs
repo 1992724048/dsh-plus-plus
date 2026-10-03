@@ -17,23 +17,39 @@ import { FONT_ROUTE, assetRoot } from '../src/fonts.js'
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
 
-/** A stub `webServer` that records the route the plugin registers. */
-function createStub() {
-  const routes = []
+/**
+ * A stub `webServer` that records the route the plugin registers.
+ *
+ * `strict` reproduces the host's duplicate guard: `register` throws when a
+ * `(kind, path)` pair is already taken, because route patterns are a
+ * composition-level contract. `shared` lets a second stub stand in for a reloaded
+ * module instance talking to the same server.
+ */
+function createStub({ shared, strict } = {}) {
+  const routes = shared ?? []
+  // The service object is created once and handed out on every `get`. Returning a
+  // fresh object each call would make every `apply` see a different server, which
+  // is not how a Cordis service behaves — and it would hide exactly the
+  // per-server registration reuse this stub exists to exercise.
+  const webServer = {
+    register: route => {
+      if (strict === true && routes.some(r => r.kind === route.kind && r.path === route.path)) {
+        throw new Error(
+          `webserver: duplicate ${route.kind} route "${route.path}" at Proxy.register`,
+        )
+      }
+      routes.push(route)
+      return () => {
+        const index = routes.indexOf(route)
+        if (index >= 0) routes.splice(index, 1)
+      }
+    },
+  }
   return {
     routes,
+    webServer,
     get(name) {
-      return name === 'webServer'
-        ? {
-            register: route => {
-              routes.push(route)
-              return () => {
-                const index = routes.indexOf(route)
-                if (index >= 0) routes.splice(index, 1)
-              }
-            },
-          }
-        : undefined
+      return name === 'webServer' ? webServer : undefined
     },
   }
 }
@@ -154,6 +170,57 @@ test('ignores the query string', async () => {
   plugin.apply(ctx)
   const { status } = await request(ctx, `${FONT_ROUTE}/jetbrains-mono/latin-400.css?v=123`)
   assert.equal(status, 200)
+})
+
+test('applying twice does not collide — the hot-reload case', () => {
+  // The regression that shipped: `webServer.register` throws on a duplicate
+  // (kind, path), so a non-idempotent `apply` fails the entry whenever `dsh-hmr`
+  // re-applies the plugin — which it does on every save to a watched file. The
+  // symptom was "duplicate prefix route … /api/dsh-plus-plus/fonts … did not
+  // activate".
+  //
+  // Two cases, because there are two ways to be called twice: the same module
+  // instance applied again, and a *fresh* instance (a real hot reload) applied
+  // against a server that already owns the route.
+  const first = createStub()
+  const disposeA = plugin.apply(first, {})
+  assert.equal(first.routes.length, 1)
+
+  // Same instance, applied again: no second registration, and the second holder
+  // releasing must not pull the route out from under the first.
+  const disposeAgain = plugin.apply(first, {})
+  assert.equal(first.routes.length, 1, 'a second apply must not register the route again')
+  disposeAgain()
+  assert.equal(first.routes.length, 1, 'one holder remains, so the route must survive')
+
+  // A fresh instance — the reloaded module — against a strict server that already
+  // owns the path. It must adopt the existing route rather than throw.
+  const reloaded = createStub({ shared: first.routes, strict: true })
+  let disposeB
+  assert.doesNotThrow(() => { disposeB = plugin.apply(reloaded, {}) },
+    'a reloaded instance must not fail on the duplicate-route guard')
+  assert.equal(first.routes.length, 1, 'the existing route is reused, not duplicated')
+
+  // The reload goes away while the original fiber is still live: the route stays.
+  disposeB()
+  assert.equal(first.routes.length, 1, 'the reload leaving must not remove the route the first fiber still holds')
+
+  // Last holder out closes it.
+  disposeA()
+  assert.equal(first.routes.length, 0, 'the route is released when the last holder disposes')
+  assert.doesNotThrow(() => disposeA(), 'disposing twice must not throw')
+})
+
+test('an unrelated registration failure still propagates', () => {
+  // The adoption path must only swallow *this route's* duplicate. A server that
+  // fails for another reason must still surface it, or a real misconfiguration
+  // would hide behind a silently shared route.
+  const ctx = createStub()
+  ctx.get = name => (name === 'webServer'
+    ? { register: () => { throw new Error('webserver: port already in use') } }
+    : undefined)
+  assert.throws(() => plugin.apply(ctx, {}), /port already in use/,
+    'an unrelated registration failure must not be swallowed')
 })
 
 // ── runner ───────────────────────────────────────────────────────────────────
