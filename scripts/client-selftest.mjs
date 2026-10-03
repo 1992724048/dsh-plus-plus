@@ -540,13 +540,32 @@ test('the composer chunk restyles without taking over the composer slot', async 
   assert.match(css, /\[data-input-scroll\]/, 'must anchor on data-input-scroll')
   assert.doesNotMatch(css, /\.RlGAzG/, 'must not hard-code a build-scoped host class name')
 
-  // The two blocks the mock-up asks for.
-  assert.match(css, /--pp-composer-surface:\s*rgb\(0 0 0 \/ 80%\)/, 'editor surface is 80% black')
-  assert.match(css, /backdrop-filter:\s*blur\(/, 'editor surface must be blurred')
+  // The four decisions the user settled on, each with the reason it was made.
+  assert.match(css, /--pp-composer-surface:\s*#000\b/,
+    'the editor must be solid black — translucent let scrolled text smear through')
+  assert.doesNotMatch(css, /backdrop-filter/,
+    'no blur: the composer sits over the conversation, and blur is what made text visible through it')
+  assert.match(css, /--pp-composer-block-gap:\s*4px/, 'the gutter between blocks is 4px')
   assert.match(css, /--pp-composer-control-fill:\s*#fff/, 'attach and send sit on white')
-  // Every control borderless.
-  assert.match(css, /\[data-composer-card\][^{]*\{[^}]*border:\s*0/, 'controls must be borderless')
+  // Each control is its own bordered block, so the row itself is not a surface.
+  assert.match(css, /:is\(button, \[role="button"\]\)\s*\{[^}]*border:\s*var\(--pp-composer-stroke\)/,
+    'every control must be its own bordered block')
+  assert.match(css, /~ \[class\*="_row"\]\s*\{[^}]*background:\s*transparent/,
+    'the tool row must not paint a shared background behind its buttons')
   void composer
+})
+
+test('the composer identifies the send button without relying on a slot that hides', async () => {
+  // The regression: the send button was styled via `activity ~ button`, but the host
+  // hides an empty activity slot with `display: none` — so the sibling combinator
+  // stopped matching exactly when the composer was empty, which is when the button
+  // was reported as oversized. `:last-of-type` in the trailing group is unaffected.
+  const { cache } = await bootRun()
+  const css = cache.get('client.composer.js').exports.descriptor.css
+  assert.doesNotMatch(css, /conversation\.input\.activity[^\n]*[~+]\s*button/,
+    'must not anchor on the activity slot — the host hides it when empty')
+  assert.match(css, /\[class\*="_trailing"\] button:last-of-type/,
+    'the send button must be found structurally, as the trailing group\'s last button')
 })
 
 test('the composer chunk declares no slot registration', async () => {

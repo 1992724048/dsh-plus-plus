@@ -38,11 +38,11 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'composer.title': '输入框',
-        'composer.subtitle': '编辑区与工具行分成两块；编辑区半透明毛玻璃；按钮全部无边框——附件与发送为白底，其余沿用编辑区底色。',
+        'composer.subtitle': '纯黑编辑区、纯黑工具行，两者独立成块、间距 4px；每个按钮各自独立成块——附件与发送白底，其余沿用黑底。',
       },
       en: {
         'composer.title': 'Composer',
-        'composer.subtitle': 'The editor and the tool row are two separate blocks; the editor gets a translucent blurred surface; every control is borderless — attach and send sit on white, the rest inherit the editor surface.',
+        'composer.subtitle': 'A solid black editor and a solid black tool row, each its own block with a 4px gutter; every control is its own block — attach and send on white, the rest on black.',
       },
     }
 
@@ -62,14 +62,19 @@ window.__ModuleLoader__.load({
      */
     const CSS = `
 [data-composer-card] {
-  /* Editor surface: 80% black over whatever is behind it, blurred. */
-  --pp-composer-surface: rgb(0 0 0 / 80%);
-  --pp-composer-surface-blur: 12px;
+  /* Editor surface: solid black. Opaque on purpose — the composer floats over the
+     conversation, and a translucent surface lets scrolled message text show through
+     as a smear behind the text being typed. */
+  --pp-composer-surface: #000;
   --pp-composer-control-fill: #fff;
-  --pp-composer-block-gap: 8px;
+  --pp-composer-block-gap: 4px;
   --pp-composer-inset: 10px;
+  --pp-composer-stroke: 1px solid var(--dsw-alias-border-l1);
+  --pp-composer-control-size: 26px;
+  --pp-composer-send-size: 28px;
 
-  /* The card stops being a surface; it becomes the gutter between two surfaces. */
+  /* The card stops being a surface; it becomes the gutter between three surfaces:
+     the editor, the tool row, and — no longer attached to either. */
   background: transparent;
   box-shadow: none;
   border: 0;
@@ -79,14 +84,11 @@ window.__ModuleLoader__.load({
 
 /* ── the editor block ───────────────────────────────────────────────────────── */
 
-/* The scroll wrapper holds the editor, and is the element that needs to become a
-   bordered block. It is a direct child of the card, as is the tool row. */
+/* The scroll wrapper holds the editor and is the first of the three blocks. */
 [data-composer-card] > [data-input-scroll] {
   box-sizing: border-box;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: var(--pp-composer-stroke);
   background: var(--pp-composer-surface);
-  -webkit-backdrop-filter: blur(var(--pp-composer-surface-blur));
-  backdrop-filter: blur(var(--pp-composer-surface-blur));
   margin-inline: var(--pp-composer-inset);
   border-radius: 0;
 }
@@ -108,91 +110,105 @@ window.__ModuleLoader__.load({
   margin-top: 10px;
 }
 
-/* ── the tool row block ─────────────────────────────────────────────────────── */
+/* ── the tool row ───────────────────────────────────────────────────────────── */
 
-/* Same treatment, so the two halves read as siblings rather than one card. */
+/* The row is no longer a surface. Each control becomes its own block, so the row
+   itself is only a positioning context with a gap between the buttons. */
 [data-composer-card] > [data-input-scroll] ~ [class*="_row"] {
-  box-sizing: border-box;
-  border: 1px solid var(--dsw-alias-border-l1);
-  background: var(--pp-composer-surface);
-  -webkit-backdrop-filter: blur(var(--pp-composer-surface-blur));
-  backdrop-filter: blur(var(--pp-composer-surface-blur));
+  background: transparent;
+  border: 0;
   margin-inline: var(--pp-composer-inset);
   border-radius: 0;
-  padding: 4px 8px;
+  padding: 0;
+  /* The host ships 12px; the blocks read as separate only with a real gutter. */
+  gap: 8px;
 }
 
-/* ── controls: borderless everywhere ────────────────────────────────────────── */
+/* The host's inner groups also carry a 12px gap and, on the trailing group, an
+   auto left margin. Both are kept — they are what spreads the blocks apart and
+   pushes the trailing ones to the right edge. */
 
-/* The host draws its controls with a filled background and no border. The mock-up
-   wants no border on any of them, so the border is cleared explicitly rather than
-   relied upon — the permission trigger and model trigger both ship with one. */
+/* ── controls: each one its own block ────────────────────────────────────────── */
+
+/* Every control is a bordered block with the editor's surface. The host draws
+   them with a fill and no border; the mock-up wants a bordered block per control,
+   so the border is set here rather than cleared. */
 [data-composer-card] :is(button, [role="button"]) {
-  border: 0;
+  border: var(--pp-composer-stroke);
   border-radius: 0;
   box-shadow: none;
+  background: var(--pp-composer-surface);
 }
 
-/* Permission and model: the editor's own surface, so they sit in the row without
-   reading as separate blocks. The host paints them transparent; a faint fill keeps
-   them legible against the blurred background. */
-[data-composer-card] [aria-haspopup="listbox"],
-[data-composer-card] [aria-haspopup="menu"] {
-  background: transparent;
-  padding: 4px 8px;
+/* ── control sizing ─────────────────────────────────────────────────────────── */
+
+/* The host fixes the attach button at 28x28 and the send button at 34x34, and the
+   send button additionally carries a translateY(-2px) nudge tuned for a layout it
+   no longer sits in. Both are overridden so every control shares one scale. */
+[data-composer-card] button[aria-haspopup="listbox"],
+[data-composer-card] button[aria-haspopup="menu"] {
+  padding: 4px 10px;
+  min-height: var(--pp-composer-control-size);
 }
 
-[data-composer-card] [aria-haspopup="listbox"]:hover,
-[data-composer-card] [aria-haspopup="menu"]:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+[data-composer-card] :is(button, [role="button"]) {
+  transform: none;
+}
+
+[data-composer-card] button[aria-haspopup="listbox"] ~ button,
+[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
+  width: var(--pp-composer-control-size);
+  height: var(--pp-composer-control-size);
+  padding: 0;
+}
+
+[data-composer-card] :is(button, [role="button"]):hover:not(:disabled) {
+  background: #1a1a1a;
 }
 
 /* ── the two white controls ─────────────────────────────────────────────────── */
 
 /* Selected by structure, not by name. The obvious anchor is the submit button's
    aria-label, but that string is localised: on an English UI a selector matching
-   it finds nothing and the button quietly loses its fill. The activity slot's
-   data-slot is stable and sits immediately before the submit button in the
-   trailing group, so "the button after the activity slot" identifies the submit
-   action in any locale.
+   it finds nothing and the button quietly loses its fill.
 
-   NOTE: no backticks in this comment — it lives inside a template literal. */
-[data-composer-card] > [data-input-scroll] ~ [class*="_row"] button[aria-label] {
-  background: transparent;
-}
+   The submit button is identified as the last button in the trailing group instead.
+   The earlier attempt anchored on the activity slot that precedes it, but the host
+   hides an empty activity slot with display:none, so the sibling combinator stopped
+   matching exactly when the composer was empty — which is when the button was
+   reported as oversized. last-of-type on the trailing group is unaffected by whether
+   the slot before it is rendered.
+
+   NOTE: no backticks in this comment — it lives inside a template literal, and a
+   backtick here closes the literal early and turns the rest of the CSS into
+   JavaScript. A test walks every CSS literal's boundary to catch exactly this. */
 
 /* Attach: the "+" beside the hidden file input — the first button in the row's
    leading group. */
-[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type,
-[data-composer-card] button[aria-haspopup="listbox"] ~ button {
+[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
   background: var(--pp-composer-control-fill);
   color: #000;
 }
 
-[data-composer-card] button[aria-haspopup="listbox"] ~ button:hover:not(:disabled) {
+[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type:hover:not(:disabled) {
   background: #e8e8e8;
 }
 
-/* Send: the button right after the activity slot. The host gives it 34x34 with a
-   translateY nudge tuned for the old layout; inside a bordered row that offset
-   misaligns it, so it is cleared. */
-[data-composer-card] [data-slot="conversation.input.activity"] ~ button,
-[data-composer-card] [data-slot="conversation.input.activity"] + button {
+/* Send: the last button of the trailing group, whatever the activity slot is doing. */
+[data-composer-card] [class*="_trailing"] button:last-of-type {
   background: var(--pp-composer-control-fill);
   color: #000;
-  transform: none;
-  width: 30px;
-  height: 30px;
+  width: var(--pp-composer-send-size);
+  height: var(--pp-composer-send-size);
+  padding: 0;
 }
 
-[data-composer-card] [data-slot="conversation.input.activity"] ~ button:hover:not(:disabled),
-[data-composer-card] [data-slot="conversation.input.activity"] + button:hover:not(:disabled) {
+[data-composer-card] [class*="_trailing"] button:last-of-type:hover:not(:disabled) {
   background: #e8e8e8;
 }
 
-[data-composer-card] [data-slot="conversation.input.activity"] ~ button:disabled,
-[data-composer-card] [data-slot="conversation.input.activity"] + button:disabled {
-  opacity: .45;
+[data-composer-card] [class*="_trailing"] button:last-of-type:disabled {
+  opacity: .4;
 }
 
 /* ── attachments ────────────────────────────────────────────────────────────── */
@@ -209,10 +225,25 @@ window.__ModuleLoader__.load({
 
 /* ── the dock below ─────────────────────────────────────────────────────────── */
 
-/* Ambient entries under the card keep the host's own treatment, but must not
-   inherit the card's now-transparent background. */
+/* Ambient entries under the card get their own blocks, on their own background.
+   The dock is a sibling of the card, not a child, so the card's custom properties
+   do not reach it — every value is restated rather than inherited. */
 [data-composer-card] ~ [class*="_dock"] {
   background: transparent;
+  border: 0;
+  margin-top: var(--pp-composer-block-gap);
+}
+
+[data-composer-card] ~ [class*="_dock"] :is(button, [role="button"]) {
+  border: var(--pp-composer-stroke);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--pp-composer-surface);
+  transform: none;
+}
+
+[data-composer-card] ~ [class*="_dock"] :is(button, [role="button"]):hover:not(:disabled) {
+  background: #1a1a1a;
 }
 `.trim()
 
