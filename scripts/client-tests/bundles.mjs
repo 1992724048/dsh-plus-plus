@@ -13,85 +13,48 @@ import vm from 'node:vm'
 
 import { ROOT, allChunkFiles, bootRun, readCode, test } from './harness.mjs'
 
-test('every bundle parses as JavaScript on its own', () => {
-  // `compileFunction(source, params, options)` — params is an array.
+test('every bundle parses, and a failure names the line', () => {
+  // The only backtick guard that has ever been reliable, and it is this simple one.
+  //
+  // SIX times a comment quoting code closed a CSS template literal early:
+  // styles.insert, inherit, an aria-label selector, a display rule, a max-width
+  // rule and a hex colour, and finally a transform plus an align-items rule. Each
+  // time the symptom was a syntax error in code far from the cause.
+  //
+  // Two guards tried to find the stray backtick and both failed: one walked
+  // opener→closer, which — once the literal was already closed — walked into the
+  // *next* literal and reported nothing; the other scanned every block comment and
+  // produced 31 false positives on the JS comments that legitimately name
+  // `require.async`.
+  //
+  // So this does not search at all. A file that parses is correct by definition,
+  // and a file that does not is caught here. The line number is derived from the
+  // error position, which is what a search would have been for.
   for (const file of ['client.js', ...allChunkFiles()]) {
     const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
-    assert.doesNotThrow(() => vm.compileFunction(source, [], { filename: file }),
-      `${file} does not parse`)
-  }
-})
-
-test('no bundle puts a raw backtick inside a CSS template literal', () => {
-  // FIVE times. A comment quoting code closed the enclosing template literal early
-  // and turned the rest of the stylesheet into JavaScript — each time a dozen
-  // unrelated tests reported a syntax error before the real cause was named:
-  //
-  //   1. styles.insert        2. inherit        3. an aria-label selector
-  //   4. a display rule       5. a max-width rule, and a hex colour
-  //
-  // The rule is deliberately blunt: it does not ask whether the backtick is
-  // *needed*, only whether one appears inside a CSS literal. Writing one there is
-  // always a mistake here, so the rule is "never", not "be careful".
-  const offenders = []
-  for (const file of ['client.js', ...allChunkFiles()]) {
-    const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
-    for (const match of source.matchAll(/const\s+(\w*CSS\w*)\s*=\s*`/g)) {
-      const start = match.index + match[0].length
-      // Walk the literal to its true end, honouring escapes.
-      let end = start
-      for (;;) {
-        end = source.indexOf('`', end)
-        if (end < 0) {
-          offenders.push(`${file} ${match[1]}: unterminated template literal`)
-          break
-        }
-        let backslashes = 0
-        for (let i = end - 1; i >= start && source[i] === '\\'; i -= 1) backslashes += 1
-        if (backslashes % 2 === 0) break
-        end += 1
-      }
-      if (end < 0) continue
-      const body = source.slice(start, end)
-      const at = body.indexOf('`')
-      if (at < 0) continue
-      // Report the file, the literal and the line, so the fix is obvious.
-      const line = source.slice(0, start + at).split('\n').length
-      const text = body.slice(at).split('\n')[0].trim()
-      offenders.push(`${file} ${match[1]} ~line ${line}: ${text.slice(0, 60)}`)
+    try {
+      // `compileFunction(source, params, options)` — params is an array.
+      vm.compileFunction(source, [], { filename: file })
+    } catch (error) {
+      // Node reports the position for a syntax error; turn it into a line so the
+      // comment that has to be reworded is immediately findable.
+      const stack = String(error.stack ?? '')
+      const position = /:(\d+)\n/.exec(stack)
+      const line = position === null ? '?' : position[1]
+      // The reported line is where the parser noticed; the stray backtick is at or
+      // just before it, so show that neighbourhood.
+      const lines = source.split('\n')
+      const at = Number(line) - 1
+      const near = lines.slice(Math.max(0, at - 2), at + 1)
+        .map((text, i) => `      ${Math.max(1, at - 1) + i} | ${text}`)
+        .join('\n')
+      assert.fail(
+        `${file} does not parse: ${error.message}\n`
+        + `    the usual cause is a backtick inside a CSS comment closing the template literal early\n`
+        + `${near}`,
+      )
     }
   }
-  assert.deepEqual(offenders, [],
-    `a backtick inside a CSS template literal closes it early — write the code without backticks:\n    ${offenders.join('\n    ')}`)
-})
-
-test('no CSS comment inside a stylesheet quotes code in backticks', () => {
-  // The same rule one step earlier, because every one of the five slipped in
-  // through a comment. Scoped to CSS literals: backticks in *JavaScript* comments
-  // are fine, since they never cross a literal boundary.
-  const offenders = []
-  for (const file of ['client.js', ...allChunkFiles()]) {
-    const source = fs.readFileSync(path.join(ROOT, file), 'utf8')
-    for (const match of source.matchAll(/const\s+(\w*CSS\w*)\s*=\s*`/g)) {
-      const start = match.index + match[0].length
-      let end = start
-      for (;;) {
-        end = source.indexOf('`', end)
-        let backslashes = 0
-        for (let i = end - 1; i >= start && source[i] === '\\'; i -= 1) backslashes += 1
-        if (backslashes % 2 === 0) break
-        end += 1
-      }
-      for (const comment of source.slice(start, end).matchAll(/\/\*([\s\S]*?)\*\//g)) {
-        if (!comment[1].includes('`')) continue
-        const line = source.slice(0, start + comment.index).split('\n').length
-        const text = comment[1].split('\n').find(l => l.includes('`')).trim()
-        offenders.push(`${file} ${match[1]} ~line ${line}: ${text.slice(0, 60)}`)
-      }
-    }
-  }
-  assert.deepEqual(offenders, [],
-    `backticks inside a CSS comment end the template literal — describe the code in prose:\n    ${offenders.join('\n    ')}`)
 })
 
 test('the stylesheet only reaches for font assets', async () => {

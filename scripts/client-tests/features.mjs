@@ -172,29 +172,47 @@ test('the model trigger is not width-capped', async () => {
   assert.doesNotMatch(trigger, /min-height/, 'no min-height on the trigger')
 })
 
+test('every control is pinned to the row\'s vertical centre', async () => {
+  // The controls sat lower than they should whenever the message list was not
+  // scrolled to the bottom. The cause is vertical placement, not a transform of
+  // their own: the host centres the row's groups, and the composer's padding
+  // changes with scroll state, so an inherited alignment let the smaller square
+  // buttons drop against the taller row.
+  const { css } = await featureOf('composer')
+  const generic = /\[data-composer-card\] :is\(button, \[role="button"\]\)\s*\{([^}]*)\}/.exec(css)?.[1]
+  assert.ok(generic !== undefined, 'the generic control rule must be locatable')
+  assert.match(generic, /align-self:\s*center/, 'every control must pin its own vertical alignment')
+  assert.match(generic, /transform:\s*none/,
+    'the host nudges the send button with a translateY for a layout it no longer sits in')
+})
+
 test('permission and model triggers are solid white', async () => {
   const { css } = await featureOf('composer')
 
   // Literal white, not a palette entry — "pure white" was the instruction, and a
   // themed near-white would drift from it. The content goes black to stay legible.
-  for (const selector of ['listbox', 'menu']) {
-    const blocks = [...css.matchAll(
-      new RegExp(`button\\[aria-haspopup="${selector}"\\][^{]*\\{([^}]*)\\}`, 'g'),
-    )].map(m => m[1])
-    assert.ok(blocks.length > 0, `no rule found for the ${selector} trigger`)
-    const white = blocks.find(block => /background:\s*#fff/.test(block))
-    assert.ok(white !== undefined, `the ${selector} trigger must be solid white`)
-    assert.match(white, /color:\s*#000/, `the ${selector} trigger needs black content on white`)
-  }
+  //
+  // Anchored on aria-haspopup of *menu*, which is what both labelled triggers carry.
+  // The attach button carries listbox, so a rule matching listbox as well would
+  // paint all four white and make the four identical — which is exactly what
+  // happened when the white rule matched both.
+  const blocks = [...css.matchAll(/button\[aria-haspopup="menu"\][^{]*\{([^}]*)\}/g)].map(m => m[1])
+  assert.ok(blocks.length > 0, 'the menu trigger rule must be locatable')
+  const white = blocks.find(block => /background:\s*#fff/.test(block))
+  assert.ok(white !== undefined, 'the labelled triggers must be solid white')
+  assert.match(white, /color:\s*#000/, 'they need black content on white')
 
-  // The generic hover must not win over them, or they would go grey-on-hover while
-  // the other two stay black — the two must read as a pair.
+  // The attach button must NOT be caught by the white rule.
+  assert.doesNotMatch(css, /button\[aria-haspopup="listbox"\][^{]*\{[^}]*background:\s*#fff/,
+    'the attach button carries listbox and must keep the accent fill, not the white one')
+
+  // The generic hover must not win over the white pair, or they would go grey on
+  // hover while the other two stayed black.
   const genericHover = /:is\(button, \[role="button"\]\):hover[^{]*\{([^}]*)\}/.exec(css)?.[1]
   assert.ok(genericHover !== undefined, 'the generic control hover must exist')
   assert.match(genericHover, /var\(--pp-composer-hover\)/, 'it should use the palette hover')
 
-  const whiteHover = [...css.matchAll(/aria-haspopup="(?:listbox|menu)"\]:hover[^{]*\{([^}]*)\}/g)]
-    .map(m => m[1])
+  const whiteHover = [...css.matchAll(/aria-haspopup="menu"\]:hover[^{]*\{([^}]*)\}/g)].map(m => m[1])
   assert.ok(whiteHover.length > 0, 'the white triggers need their own hover')
   for (const block of whiteHover) assert.match(block, /background:\s*#ededed/)
 
@@ -202,7 +220,7 @@ test('permission and model triggers are solid white', async () => {
   // ones. The dock has its own generic rules at the end of the sheet, but they are
   // scoped to the dock's subtree and cannot reach the composer.
   const genericIndex = css.indexOf('[data-composer-card] :is(button, [role="button"]) {')
-  const whiteIndex = css.search(/aria-haspopup="listbox"\][^{]*\{[^}]*background:\s*#fff/)
+  const whiteIndex = css.search(/aria-haspopup="menu"\][^{]*\{[^}]*background:\s*#fff/)
   assert.ok(genericIndex >= 0 && whiteIndex > genericIndex,
     'the white triggers must come after the generic control rules, or they lose the cascade')
 })

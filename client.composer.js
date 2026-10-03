@@ -180,13 +180,26 @@ window.__ModuleLoader__.load({
 
 /* ── controls ───────────────────────────────────────────────────────────────── */
 
-/* Every control is its own block: a bordered, filled surface with no shadow. */
+/* Every control is its own block: a bordered, filled surface with no shadow.
+
+   The cleared transform removes the host's nudge on the send button — a translateY
+   tuned for a layout that button no longer sits in.
+
+   The explicit alignment is stated rather than inherited. The controls shifted
+   downwards whenever the message list was not scrolled to the bottom, and the
+   cause is vertical placement rather than any transform of their own: the host
+   centres the row's groups, and the composer's own padding changes with scroll
+   state, so an inherited alignment leaves the smaller square buttons sitting low
+   against the taller row. Pinning it here makes every control independent of what
+   the row does. */
 [data-composer-card] :is(button, [role="button"]) {
   border: 1px solid var(--pp-composer-stroke);
   border-radius: 0;
   box-shadow: none;
   background: var(--pp-composer-control);
   transform: none;
+  align-self: center;
+  vertical-align: middle;
   -webkit-backdrop-filter: blur(var(--pp-composer-blur));
   backdrop-filter: blur(var(--pp-composer-blur));
 }
@@ -209,7 +222,6 @@ window.__ModuleLoader__.load({
    ellipsize when they run out, which is the host's own behaviour.
 
    NOTE: no backticks in this comment — it lives inside a template literal. */
-[data-composer-card] button[aria-haspopup="listbox"],
 [data-composer-card] button[aria-haspopup="menu"] {
   height: var(--pp-composer-control-size);
   max-width: none;
@@ -221,21 +233,28 @@ window.__ModuleLoader__.load({
    buttons. The white is the literal hash-colour fff in both schemes rather than a
    palette entry — "pure white" was the instruction, and a themed near-white would
    drift from it. The icon and label are tinted black to keep the contrast
-   readable. */
-[data-composer-card] button[aria-haspopup="listbox"],
+   readable.
+
+   Anchored on aria-haspopup of *menu*, deliberately. The attach button carries
+   listbox, not menu, so a rule matching listbox as well would paint the "+"
+   white too and make all four buttons identical. Both labelled triggers are
+   menu. */
 [data-composer-card] button[aria-haspopup="menu"] {
   background: #fff;
   color: #000;
   border-color: var(--pp-composer-stroke);
 }
 
-[data-composer-card] button[aria-haspopup="listbox"]:hover:not(:disabled),
 [data-composer-card] button[aria-haspopup="menu"]:hover:not(:disabled) {
   background: #ededed;
 }
 
-/* Square controls: attach (the "+" beside the hidden file input) and send. */
-[data-composer-card] button[aria-haspopup="listbox"] ~ button,
+/* Square controls: attach and send.
+
+   The attach button is the "+" carrying aria-haspopup of listbox — it is the only
+   one — and it is also the first button in the row's leading group. Either anchor
+   finds it; the group one is kept as a backstop in case the attribute changes. */
+[data-composer-card] button[aria-haspopup="listbox"],
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
   width: var(--pp-composer-control-size);
   height: var(--pp-composer-control-size);
@@ -258,13 +277,16 @@ window.__ModuleLoader__.load({
    backtick here closes the literal early and turns the rest of the CSS into
    JavaScript. A test walks every CSS literal's boundary to catch exactly this. */
 
-/* Attach: the "+" beside the hidden file input — the first button in the row's
-   leading group. */
+/* Attach: the "+" that opens the file/command list — the only button carrying
+   aria-haspopup of listbox, and the first button in the row's leading group.
+   Both anchors are listed so a change to either still leaves the accent applied. */
+[data-composer-card] button[aria-haspopup="listbox"],
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
   background: var(--pp-composer-accent);
   color: var(--pp-composer-surface);
 }
 
+[data-composer-card] button[aria-haspopup="listbox"]:hover:not(:disabled),
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type:hover:not(:disabled) {
   background: var(--pp-composer-accent-hover);
 }
