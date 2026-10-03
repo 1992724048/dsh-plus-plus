@@ -53,33 +53,56 @@ window.__ModuleLoader__.load({
      * changes, so the composer follows the theme without this chunk knowing how the
      * shell scopes its themes or which attribute carries the scheme.
      *
-     * The colours:
+     * The colours, one scheme per line:
      *
-     *  - dark — editor solid black, controls black, attach and send white.
-     *  - light — editor 50% white over a blur, controls 12% black over the same
-     *    blur, attach and send black. "Reversed" means the accent swaps from white
-     *    to black, not that every value inverts.
+     *  - dark  — the editor is 50% white over a blur, and **everything on it is
+     *    white**: the buttons, their labels, their icons.
+     *  - light — the editor is 50% black over a blur, and **everything on it is
+     *    black**.
      *
-     * The blur is a variable rather than a literal: it is `0px` in dark, which turns
-     * the effect off, so one declaration covers both schemes. `blur(0px)` is a no-op,
-     * not a per-frame cost.
+     * The whole composer inverts with the theme, and the editor stays translucent
+     * in both. An earlier version had the editor opaque black in dark while the
+     * controls stayed translucent, and the labelled triggers were a literal white
+     * in both schemes — which read as "pure white" in light and glared against a
+     * black editor in dark. Three times now a literal was the reason a scheme did
+     * not follow; the colours live in the palette for exactly this reason.
+     *
+     * The blur is a variable rather than a literal, so one declaration covers both
+     * schemes and a future "no blur" is a value change rather than a rule.
      */
     const PALETTE = {
-      '--pp-composer-surface': { light: 'rgb(255 255 255 / 50%)', dark: '#000' },
-      '--pp-composer-control': { light: 'rgb(0 0 0 / 12%)', dark: '#000' },
+      // The editor: translucent in both schemes, so the conversation reads faintly
+      // through it. The blur rides along in both.
+      '--pp-composer-surface': { light: 'rgb(0 0 0 / 50%)', dark: 'rgb(255 255 255 / 50%)' },
+      '--pp-composer-blur': { light: '16px', dark: '16px' },
+
+      // Everything sitting on the editor takes the scheme's own value, so the
+      // composer reads as one piece: white on white in dark, black on black in
+      // light. The labels and icons use the ink pair.
+      '--pp-composer-trigger': { light: '#000', dark: '#fff' },
+      '--pp-composer-trigger-ink': { light: '#fff', dark: '#000' },
+      '--pp-composer-trigger-hover': { light: 'rgb(0 0 0 / 14%)', dark: 'rgb(255 255 255 / 14%)' },
+
+      // The attach and send buttons are the same story: solid in the scheme's own
+      // value, with the ink flipped so the glyph stays legible.
       '--pp-composer-accent': { light: '#000', dark: '#fff' },
+      '--pp-composer-accent-ink': { light: '#fff', dark: '#000' },
+
       // The hover the user asked for: the attach and send buttons go yellow. One
       // value for both schemes, since it was specified as a single colour.
       '--pp-composer-accent-hover': { light: '#ffee22', dark: '#ffee22' },
       '--pp-composer-accent-hover-ink': { light: '#000', dark: '#000' },
+
       // How long the accent pair takes to cross-fade on hover.
       '--pp-composer-accent-transition': { light: '200ms', dark: '200ms' },
-      // The labelled triggers get a quiet grey on hover, as they are not the
-      // primary action.
-      '--pp-composer-white-hover': { light: '#ededed', dark: '#ededed' },
+
+      // A hairline that separates a control from the editor behind it. Same value in
+      // both schemes: the scheme's own colour at low alpha, so it is never a new hue.
       '--pp-composer-stroke': { light: 'rgb(0 0 0 / 16%)', dark: 'rgb(255 255 255 / 22%)' },
-      '--pp-composer-hover': { light: 'rgb(0 0 0 / 8%)', dark: '#1a1a1a' },
-      '--pp-composer-blur': { light: '16px', dark: '0px' },
+
+      // The generic control fill, for anything not covered above.
+      '--pp-composer-control': { light: 'rgb(0 0 0 / 12%)', dark: 'rgb(255 255 255 / 12%)' },
+      '--pp-composer-hover': { light: 'rgb(0 0 0 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
     }
 
     /**
@@ -226,13 +249,14 @@ window.__ModuleLoader__.load({
  *
  * Position within the row is stable and observable, so it is used instead:
  * permission is a button in the modes group, model is the one inside the model
- * slot. Both are white — a literal rather than a palette entry, because "pure
- * white" was the instruction and a themed near-white would drift from it.
+ * slot. Both take their fill and their ink from the palette, so they invert with
+ * the theme — a literal white read as "pure white" in light but glared against a
+ * black editor in dark.
  *
- * The content-based width is what makes the box follow the text. The host sizes these
- * buttons from their own caps — min(360px, 45cqw) on the model one, a fixed 220px
- * on the permission one — and the model's cap is in container-query units, so it
- * shrinks with the composer and can end up narrower than the label it contains.
+ * The content-based width is what makes the box follow the text. The host sizes
+ * these buttons from their own caps — min(360px, 45cqw) on the model one, a fixed
+ * 220px on the permission one — and the model's cap is in container-query units, so
+ * it shrinks with the composer and can end up narrower than the label it contains.
  * A max-width cannot fix that: the box is still laid out from the cap and the text
  * spills past its edge. Sizing to the content instead puts the border around the
  * text, and max-width then becomes a ceiling that only bites on a very long name.
@@ -246,8 +270,8 @@ window.__ModuleLoader__.load({
   padding: 0 12px;
   width: max-content;
   max-width: 340px;
-  background: #fff;
-  color: #000;
+  background: var(--pp-composer-trigger);
+  color: var(--pp-composer-trigger-ink);
   border-color: var(--pp-composer-stroke);
   overflow: hidden;
 }
@@ -297,11 +321,11 @@ window.__ModuleLoader__.load({
   display: none !important;
 }
 
-/* The labelled triggers keep their quiet grey hover. They are not the primary
-   action, so the accent pair's yellow is deliberately not shared with them. */
+/* The labelled triggers keep a quiet hover. They are not the primary action, so
+   the accent pair's yellow is deliberately not shared with them. */
 [data-composer-card] [class*="_modes"] button:hover:not(:disabled),
 [data-composer-card] [data-slot="conversation.input.model"] button:hover:not(:disabled) {
-  background: var(--pp-composer-white-hover);
+  background: var(--pp-composer-trigger-hover);
 }
 
 /* Square controls: attach and send.
@@ -336,13 +360,16 @@ window.__ModuleLoader__.load({
    aria-haspopup of listbox, and the first button in the row's leading group.
    Both anchors are listed so a change to either still leaves the accent applied.
 
+   The ink is the accent's own pair rather than the editor surface: the surface is
+   translucent now, and a glyph painted in it would render at half alpha.
+
    The transition is declared on the resting state, not on the hover. A rule that
    appears only while hovered animates *into* that state but snaps out of it, so
    the fade would be one-way. */
 [data-composer-card] button[aria-haspopup="listbox"],
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
   background: var(--pp-composer-accent);
-  color: var(--pp-composer-surface);
+  color: var(--pp-composer-accent-ink);
   transition: background-color var(--pp-composer-accent-transition) ease,
               color var(--pp-composer-accent-transition) ease;
 }
@@ -357,7 +384,7 @@ window.__ModuleLoader__.load({
    Square, like attach, and the same 28px as every other control. */
 [data-composer-card] [class*="_trailing"] button:last-of-type {
   background: var(--pp-composer-accent);
-  color: var(--pp-composer-surface);
+  color: var(--pp-composer-accent-ink);
   width: var(--pp-composer-control-size);
   height: var(--pp-composer-control-size);
   padding: 0;

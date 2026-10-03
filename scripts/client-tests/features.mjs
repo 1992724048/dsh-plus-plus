@@ -114,13 +114,18 @@ test('the composer chunk restyles without taking over the composer slot', async 
   assert.match(css, /background:\s*var\(--pp-composer-surface\)/,
     'the editor must take its surface from the palette, not a literal')
 
-  // Literal colours are allowed and intentional: the pure-white labelled triggers,
-  // their black content, and the accent ink that keeps them readable. Asserting
-  // they are the ONLY ones means a new literal has to be argued for rather than
-  // slipping in — the yellow hover went into the palette for exactly that reason.
+  // No literal colours at all. Every one of them belongs in the palette, where the
+  // host can flip it with the scheme — which is the whole point. Three rounds of
+  // fixes here came from a literal that did not: the triggers were hard-coded white
+  // while everything else inverted, so dark showed white buttons on a black editor.
   const literals = [...css.matchAll(/:\s*(#[0-9a-f]{3,8})\b/gi)].map(m => m[1].toLowerCase())
-  assert.deepEqual([...new Set(literals)].sort(), ['#000', '#fff'],
-    `only the labelled triggers may use literal colours; found ${literals.join(', ')}`)
+  assert.deepEqual([...new Set(literals)], [],
+    `every colour must come from the palette so it can follow the theme; found literals ${literals.join(', ')}`)
+
+  // And the palette itself carries no literal in the stylesheet's place — the
+  // triggers must reference it rather than painting over it.
+  assert.doesNotMatch(css, /\[class\*="_modes"\] button,[^{]*\{[^}]*background:\s*#/,
+    'the labelled triggers must take their fill from the palette')
 
   // Each control is its own bordered block, so the row itself is not a surface.
   assert.match(css, /:is\(button, \[role="button"\]\)\s*\{[^}]*border:\s*1px solid var\(--pp-composer-stroke\)/,
@@ -177,7 +182,10 @@ test('the labelled triggers are found by structure, not by aria-haspopup', async
   // separate lines, so the pattern tolerates whitespace between them.
   const shared = /\[class\*="_modes"\] button,\s*\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)
   assert.ok(shared, 'both labelled triggers must share one rule, anchored on structure')
-  assert.match(shared[1], /background:\s*#fff/, 'that rule must carry the white fill')
+  assert.match(shared[1], /background:\s*var\(--pp-composer-trigger\)/,
+    'that rule must take the fill from the palette, so both schemes follow')
+  assert.match(shared[1], /color:\s*var\(--pp-composer-trigger-ink\)/,
+    'and the ink with it, so a white glyph does not sit on a white button')
   assert.match(shared[1], /padding:\s*0 12px/, 'and the padding the host was overriding')
   assert.match(shared[1], /max-width:\s*340px/, 'and a width generous enough for a permission mode')
   assert.match(shared[1], /height:\s*var\(--pp-composer-control-size\)/, 'and the shared control height')
@@ -186,17 +194,17 @@ test('the labelled triggers are found by structure, not by aria-haspopup', async
   assert.doesNotMatch(css, /button\[aria-haspopup="menu"\][^{]*\{[^}]*background/,
     'the permission trigger carries no aria-haspopup, so a menu-anchored rule misses it')
 
-  // The attach button keeps listbox and must not be caught by the white rule.
-  assert.doesNotMatch(css, /button\[aria-haspopup="listbox"\][^{]*\{[^}]*background:\s*#fff/,
+  // The attach button keeps listbox and must not be caught by the trigger rule.
+  assert.doesNotMatch(css, /button\[aria-haspopup="listbox"\][^{]*\{[^}]*background:\s*var\(--pp-composer-trigger\)/,
     'the attach button must keep the accent fill')
 
-  // One white fill, and one hover — shared, so the two cannot drift apart. The
-  // hover comes from the palette, not a literal.
-  assert.equal([...css.matchAll(/background:\s*#fff/g)].length, 1, 'the white fill must be declared once')
+  // One fill declaration and one hover, shared — so the two cannot drift apart.
+  assert.equal([...css.matchAll(/background:\s*var\(--pp-composer-trigger\)/g)].length, 1,
+    'the trigger fill must be declared once')
   const hovers = [...css.matchAll(/\[class\*="_modes"\] button:hover[^{]*\{([^}]*)\}/g)].map(m => m[1])
   assert.ok(hovers.length > 0, 'the triggers need a hover of their own')
   for (const block of hovers) {
-    assert.match(block, /background:\s*var\(--pp-composer-white-hover\)/,
+    assert.match(block, /background:\s*var\(--pp-composer-trigger-hover\)/,
       'the labelled triggers hover on their own palette value — not the accent yellow')
   }
 })
@@ -354,16 +362,41 @@ test('the composer palette is declared for both schemes', async () => {
     }
   }
 
-  assert.equal(get('--pp-composer-surface', 'light'), 'rgb(255 255 255 / 50%)',
-    'light: the editor is a translucent white')
-  assert.equal(get('--pp-composer-surface', 'dark'), '#000', 'dark: the editor is solid black')
+  // The whole composer inverts with the theme, and the editor stays translucent in
+  // both. This is the contract three rounds of fixes were converging on without
+  // stating it: the editor is a 50% wash either way, and everything sitting on it —
+  // the labelled triggers and the accent pair — takes that scheme's own value.
+  assert.equal(get('--pp-composer-surface', 'light'), 'rgb(0 0 0 / 50%)',
+    'light: the editor is a translucent black wash')
+  assert.equal(get('--pp-composer-surface', 'dark'), 'rgb(255 255 255 / 50%)',
+    'dark: the editor is a translucent white wash')
+
+  // Labelled triggers: the scheme's own colour, with the ink flipped so a glyph on a
+  // white button is black and vice versa.
+  assert.equal(get('--pp-composer-trigger', 'light'), '#000', 'light: the triggers are black')
+  assert.equal(get('--pp-composer-trigger', 'dark'), '#fff', 'dark: the triggers are white')
+  assert.equal(get('--pp-composer-trigger-ink', 'light'), '#fff', 'light: their labels are white')
+  assert.equal(get('--pp-composer-trigger-ink', 'dark'), '#000', 'dark: their labels are black')
+
+  // Attach and send follow the same pairing.
   assert.equal(get('--pp-composer-accent', 'light'), '#000', 'light: attach and send are black')
   assert.equal(get('--pp-composer-accent', 'dark'), '#fff', 'dark: attach and send are white')
-  assert.ok(get('--pp-composer-control', 'light').includes('/'), 'light: the other controls are translucent')
-  assert.equal(get('--pp-composer-control', 'dark'), '#000', 'dark: the other controls are black')
-  // The blur is a variable so one declaration covers both: on in light, off in dark.
+  assert.equal(get('--pp-composer-accent-ink', 'light'), '#fff', 'light: their glyphs are white')
+  assert.equal(get('--pp-composer-accent-ink', 'dark'), '#000', 'dark: their glyphs are black')
+
+  // A fill and its ink must never be the same value, in either scheme — that is
+  // what makes the glyph legible, and it is the one invariant a palette edit can
+  // silently break.
+  for (const scheme of ['light', 'dark']) {
+    assert.notEqual(get('--pp-composer-trigger', scheme), get('--pp-composer-trigger-ink', scheme),
+      `${scheme}: a trigger and its ink would be invisible`)
+    assert.notEqual(get('--pp-composer-accent', scheme), get('--pp-composer-accent-ink', scheme),
+      `${scheme}: an accent button and its glyph would be invisible`)
+  }
+
+  // The blur is on in both, because the editor is translucent in both.
   assert.notEqual(get('--pp-composer-blur', 'light'), '0px', 'light: the surface is blurred')
-  assert.equal(get('--pp-composer-blur', 'dark'), '0px', 'dark: the blur is off, not merely weaker')
+  assert.notEqual(get('--pp-composer-blur', 'dark'), '0px', 'dark: the surface is blurred too')
 })
 
 test('the send button is found structurally, not via a slot that hides', async () => {
