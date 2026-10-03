@@ -295,7 +295,9 @@ test('the model trigger shares the labelled triggers\' width and may shrink', as
   // The shared rule must clip, which is what keeps the forced text inside the box.
   const shared = /\[class\*="_modes"\] button,\s*\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)
   assert.ok(shared, 'the shared trigger rule must exist')
-  assert.match(shared[1], /max-width:\s*340px/, 'both triggers share one width cap')
+  assert.match(shared[1], /width:\s*max-content/,
+    'the trigger must size to its content — a cap alone still lays the box out narrower than the text')
+  assert.match(shared[1], /max-width:\s*340px/, 'max-width stays, but only as a ceiling')
   assert.match(shared[1], /overflow:\s*hidden/,
     'the trigger must clip; without it the text runs outside the button')
 })

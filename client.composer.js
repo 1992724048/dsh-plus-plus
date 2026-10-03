@@ -216,51 +216,52 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-hover);
 }
 
-/* The two labelled triggers — permission and model — carry a label, an icon and a
-   chevron, so they are sized by content rather than forced square.
-
-   Anchored on structure, not on aria-haspopup. An earlier version used that
-   attribute and it was wrong: the model trigger carries menu, but the permission
-   trigger carries **no** aria-haspopup at all — it opens by other means — so the
-   rule matched only one of the two. The other kept the host's own padding of
-   0 4px 0 8px, its 220px max-width and its transparent fill, which is what it
-   looked like.
-
-   Position within the row is stable and observable, so it is used instead:
-   permission is a button in the modes group, model is the one inside the model
-   slot. Both are white — the fill is a literal rather than a palette entry,
-   because "pure white" was the instruction and a themed near-white would drift
-   from it.
-
-   The width is set here rather than left to the host: the model trigger's
-   min(360px, 45cqw) cap is what left the name too narrow, and the permission
-   trigger's fixed 220px is too tight for a long mode name. Both hosts' labels
-   already ellipsize, so a generous width gives them room before that matters. */
+/* The two labelled triggers.
+ *
+ * Anchored on structure, not on aria-haspopup. An earlier version used that
+ * attribute and it was wrong: the model trigger carries menu, but the permission
+ * trigger carries **no** aria-haspopup at all — it opens by other means — so the
+ * rule matched only one of the two, and the other kept the host's own padding,
+ * its 220px cap and its transparent fill.
+ *
+ * Position within the row is stable and observable, so it is used instead:
+ * permission is a button in the modes group, model is the one inside the model
+ * slot. Both are white — a literal rather than a palette entry, because "pure
+ * white" was the instruction and a themed near-white would drift from it.
+ *
+ * The content-based width is what makes the box follow the text. The host sizes these
+ * buttons from their own caps — min(360px, 45cqw) on the model one, a fixed 220px
+ * on the permission one — and the model's cap is in container-query units, so it
+ * shrinks with the composer and can end up narrower than the label it contains.
+ * A max-width cannot fix that: the box is still laid out from the cap and the text
+ * spills past its edge. Sizing to the content instead puts the border around the
+ * text, and max-width then becomes a ceiling that only bites on a very long name.
+ *
+ * The clip stays as the backstop: max-content can still exceed the cap,
+ * and the host's labels ellipsize, so clipping bounds the edge rather than hiding
+ * anything. */
 [data-composer-card] [class*="_modes"] button,
 [data-composer-card] [data-slot="conversation.input.model"] button {
   height: var(--pp-composer-control-size);
   padding: 0 12px;
+  width: max-content;
   max-width: 340px;
   background: #fff;
   color: #000;
   border-color: var(--pp-composer-stroke);
-  /* The trigger now clips. The host's own buttons declare no overflow, so without
-     this the labels are free to run outside the box whenever the width cannot
-     follow them — which is what a fixed max-width plus unshrinkable text produces.
-     The host's labels already ellipsize, so clipping here only bounds the edge. */
   overflow: hidden;
 }
 
-/* The model trigger's width.
+/* The model trigger may still shrink when the row has no room.
  *
- * It shares the labelled-trigger rule above, so the width is the same as the
- * permission trigger's — the model name simply ellipsizes past it, which is the
- * host's own behaviour for the label. An earlier version gave the model its own
- * max-width of 50cqw, which made it visibly wider than the permission button and
- * read as a different treatment; the cap is shared now.
+ * A zero min-width is what allows that: the host's own labels carry min-width:0, and
+ * without it on the button the flex item cannot compress below its content, so a
+ * tight row overflows instead of wrapping. It is the shrink *permission*, not a
+ * width — the content-based width above still decides how wide it wants to be, and
+ * The flex shrink factor decides whether it has to give ground.
  *
- * min-width:0 keeps the host's own fallback reachable: when the row genuinely
- * has no room the trigger may still shrink and the row wraps. */
+ * An earlier version paired this with a non-shrinking flex value, which cancelled the permission
+ * out and produced the opposite symptom: a box narrower than its own text. */
 [data-composer-card] [data-slot="conversation.input.model"] button {
   min-width: 0;
 }
