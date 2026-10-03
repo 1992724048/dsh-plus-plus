@@ -54,5 +54,31 @@ try {
   console.log('  FAIL import:', error.message)
 }
 
+console.log('\nresolving every client chunk through the exports map, from the profile…')
+try {
+  const { createRequire } = await import('node:module')
+  const fromProfileEntry = createRequire(path.join(PROFILE_PLUGIN, 'client.js'))
+  const chunks = fs.readdirSync(REPO).filter(name => /^client\..*\.js$/.test(name))
+  if (chunks.length === 0) {
+    failures += 1
+    console.log('  FAIL no client chunks found on disk')
+  }
+  for (const chunk of chunks) {
+    // The shell resolves `<pkg>/<file>` through this map, so a chunk missing from
+    // `exports` would fail to load only in the browser.
+    const specifier = `dsh-plus-plus/${chunk}`
+    const resolved = fromProfileEntry.resolve(specifier)
+    const ok = resolved.endsWith(chunk)
+    console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${specifier}`)
+    if (!ok) {
+      failures += 1
+      console.log(`         expected to end with ${chunk}, got ${resolved}`)
+    }
+  }
+} catch (error) {
+  failures += 1
+  console.log('  FAIL exports map:', error.message)
+}
+
 console.log(failures === 0 ? '\njunction wiring ok' : `\n${failures} problem(s)`)
 process.exit(failures === 0 ? 0 : 1)

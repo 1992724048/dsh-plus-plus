@@ -4,7 +4,7 @@ DeepSeek Harness 多功能增强插件。
 
 目标领域：主题、提示词、界面功能、对话优化、能力扩展。
 
-**已实现：字体栈、直角化。**
+**已实现：字体栈、直角化。** 浏览器半身按功能分模块，见「结构」。
 
 ## 状态
 
@@ -15,6 +15,63 @@ client.js          浏览器半身（手写 ModuleLoader bundle，无构建步�
 cordis.patch.yml   把宿主半身挂进 profile 合成
 scripts/           宿主与浏览器两侧的自测
 ```
+
+## 结构
+
+按功能分模块，共享一层 core。**新增一个功能 = 新增一个 `client.<名字>.js` +
+在 `client.js` 的 `CHUNKS` 里加一行，`client.js` 本身不用改。**
+
+```
+client.js          入口：加载 chunk、绑定 locale、渲染设置页骨架
+client.core.js     公共层：功能注册表、样式表注入、双语字典校验
+client.font.js     功能：字体栈
+client.shape.js    功能：直角化
+src/fonts.js       宿主：字体路由
+index.js           宿主入口
+scripts/           自测与探针
+```
+
+### 宿主支持分包
+
+壳的 `__ModuleLoader__` 会解析 `require('dsh-plus-plus/client.<名字>.js')`，按
+`client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js` 取同目录的兄弟文件。文件名的 `client.` 前缀
+是硬要求——不匹配就直接 `cannot resolve chunk`。
+
+`package.json` 的 `exports` 因此要开一条通配：
+
+```json
+"./client": "./client.js",
+"./client.*": "./client.*"
+```
+
+### core 提供什么
+
+功能 chunk 不碰 `document`、不注册 locale、也不管样式表什么时候被移除：
+
+| 导出 | 作用 |
+| --- | --- |
+| `defineFeature(descriptor)` | 声明一个功能；重复 id 直接抛错，不静默覆盖 |
+| `listFeatures()` | 按 `order` 升序返回全部功能 |
+| `styleSheet(css, label)` | 插入样式表并返回 disposer |
+| `registerStyles(ctx, css, label)` | 同上，但自己开 effect，调用方不必管生命周期 |
+| `dictionaries(name, dicts)` | 校验双语平衡，**指出具体缺哪个键** |
+
+功能描述符的字段：`id` `group` `order` `locale` `css` `settings` `apply`。
+`client.js` 只认这七个，所以加字段不用改入口。
+
+### 三条设计约定
+
+**core 是跨 chunk 的单例。** 功能注册表是模块级数组，这正是多个 chunk 共享同一份
+列表的原因。副作用是自测里每次 boot 都必须新建模块缓存，否则上一个 chunk 声明的功能
+会累积——这一点在 `client-selftest.mjs` 的 `boot()` 里有注释说明。
+
+**字典按功能 id 加前缀后合并。** 每个功能只管自己的 `{ zh, en }`，入口合并成
+`font.font.title` 这样的键再统一注册一次。这样 `locale.register` 的双语平衡检查仍然
+只有一次调用，而 `core.dictionaries` 能在合并**之前**就指出是哪个功能的哪个键不对。
+
+**`order` 是样式表的胜负手。** 功能各自贡献样式表，同特异性下后加载的赢。
+`shape` 声明为 20、`font` 为 10，就是为了让直角扫除规则最后生效——否则字体的某条
+规则可能把圆角带回来。
 
 ## 已实现：字体栈
 
@@ -63,11 +120,16 @@ base64 这些字体。宿主因此用一条 `prefix` 路由 `/api/dsh-plus-plus/
 npm test
 ```
 
-20 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
-扩展名白名单），浏览器侧 11 项（bundle 解析、`apply()` 跑完、不引用 loader 未提供
-的自由变量、双语字典键一致、每条 `@import` 都指向磁盘上真实存在且在包根内的文件、
-字体栈顺序、宿主字体变量被重指向、六个圆角 token 归零、扫除规则带 `!important`
+27 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
+扩展名白名单），浏览器侧 18 项（入口解析、`apply()` 跑完、不引用 loader 未提供的
+自由变量、chunk 文件名合规、**磁盘上的 chunk 与入口 require 完全一致**、core 单例、
+每个功能声明完整、启动顺序递增、重复 id 抛错、双语不平衡报错并指出键名、合并后字典
+平衡、设置页组合出每节、effect 不重复注册、每条 `@import` 都指向磁盘上真实存在且在
+包根内的文件、宿主字体变量被重指向、六个圆角 token 归零、扫除规则带 `!important`
 且没有全局 `corner-shape`）。
+
+> 「磁盘上的 chunk 与入口 require 完全一致」是防漂移那一条：磁盘上有但没人 require
+> 的是死代码；require 了但磁盘上没有的，会在浏览器里加载失败。
 
 ## 已实现：直角化
 
@@ -118,8 +180,8 @@ npm test
 
 另有两个诊断脚本，它们不是测试，是**没有浏览器时用来复现启动故障的探针**：
 ```bash
-npm run probe:client    # 按 loader 的方式跑一遍 factory，打印 apply() 抛什么
-npm run probe:install   # 从 profile 视角验证依赖解析（见下面的开发流程）
+npm run probe:client    # 按 loader 的方式跑一遍，含分包解析，打印 apply() 抛什么
+npm run probe:install   # 从 profile 视角验证依赖解析与每个 chunk 的 exports（见下面）
 ```
 
 ## 开发流程：profile 用 junction 指向本仓库
@@ -141,8 +203,9 @@ New-Item -ItemType Junction -Path $nm -Target $repo
 
 字体包不会丢：仓库自己有 `node_modules`，junction 让 `require.resolve` 顺着
 junction 落到 `D:\CODE\dsh-plus-plus\node_modules`。`npm run probe:install` 守的
-就是这条——它从 profile 视角解析两个字体包，再加载 `src/fonts.js` 问
-`assetRoot()`，任何一环断了立刻报出来。
+就是这条——它从 profile 视角解析两个字体包、经 junction 加载 `src/fonts.js` 问
+`assetRoot()`，再逐个解析 `client.*.js` 确认 `exports` 通配生效，任何一环断了立刻
+报出来。
 
 > 别对 junction 跑 `install_bundle`：pnpm 会把链接替换回拷贝。要改依赖，先在
 > 仓库里改 `package.json` 并 `npm install`，再删掉 profile 里那份重建 junction。
@@ -180,4 +243,5 @@ junction 落到 `D:\CODE\dsh-plus-plus\node_modules`。`npm run probe:install` �
 
 ## 下一步
 
-按领域逐个细化需求再动手：提示词、对话优化、能力扩展。
+按领域逐个细化需求再动手：提示词、对话优化、能力扩展。每个领域 = 一个新的
+`client.<名字>.js` 加一行 `CHUNKS`。

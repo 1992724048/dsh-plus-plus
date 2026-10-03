@@ -1,77 +1,137 @@
 /**
- * Reproduce exactly what the shell's client module system does to this bundle.
+ * Diagnostic probe: run the client half the way the shell does, and report what
+ * breaks.
  *
- * Diagnostic probe, not a test: it runs the factory the way the loader does and
- * then checks the exports face the loader requires. Run:
+ * Reproduces a boot failure without a browser: loads `client.js`, resolves its
+ * sibling chunks through the same `require` the shell provides, and runs
+ * `apply(ctx)` against a stub context. Any throw is reported verbatim — this is
+ * what pointed at `styles is not defined` when the entry failed to activate.
  *
- *   node scripts/probe-client.mjs
+ * Run: `node scripts/probe-client.mjs`
  */
 
 import fs from 'node:fs'
 import vm from 'node:vm'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const source = fs.readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
+const PACKAGE = 'dsh-plus-plus'
 
-let registration
-// Mirror a real page as closely as possible: a bundle loaded through
-// `__ModuleLoader__` gets `require` and page globals, nothing else. Notably no
-// `styles` — that builtin belongs to the dynamic client-half path only.
-const styleTags = []
-const sandbox = {
-  window: { __ModuleLoader__: { load: value => { registration = value } } },
-  console,
-  document: {
-    documentElement: { lang: 'zh' },
-    createElement: tag => (tag === 'style'
-      ? { tag, textContent: '', setAttribute: () => {}, remove: () => {} }
-      : {}),
-    head: { appendChild: node => { styleTags.push(node); return node } },
-  },
-  fetch: async () => ({ ok: true }),
-  setInterval: () => {},
-  clearInterval: () => {},
+/** The loader's own chunk-naming rule, copied so a change upstream is visible. */
+const CLIENT_CHUNK = /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
+
+const noop = () => {}
+
+/** Evaluate one bundle in its own realm and return what its factory exported. */
+function evaluate(fileName, requireImpl, styleTags) {
+  let registration
+  const sandbox = {
+    window: { __ModuleLoader__: { load: value => { registration = value } } },
+    console,
+    // A real page provides these. `styles` deliberately does not exist here,
+    // because it is not one of the globals a __ModuleLoader__ factory receives.
+    document: {
+      documentElement: { lang: 'zh' },
+      createElement: tag => (tag === 'style'
+        ? {
+            tag,
+            textContent: '',
+            attributes: {},
+            setAttribute(name, value) { this.attributes[name] = value },
+            getAttribute(name) { return this.attributes[name] },
+            remove: noop,
+          }
+        : {}),
+      head: { appendChild: node => { styleTags.push(node); return node } },
+    },
+    fetch: async () => ({ ok: true }),
+    setInterval: noop,
+    clearInterval: noop,
+  }
+  vm.createContext(sandbox)
+  vm.runInContext(fs.readFileSync(path.join(ROOT, fileName), 'utf8'), sandbox, { filename: fileName })
+  if (registration === undefined) throw new Error(`${fileName} did not call __ModuleLoader__.load`)
+  return registration.factory(requireImpl)
 }
-vm.createContext(sandbox)
-vm.runInContext(source, sandbox, { filename: 'client.js' })
 
-console.log('registered id   :', registration?.id)
-console.log('factory arity   :', registration?.factory?.length)
+const React = {
+  createElement: (type, props, ...children) => ({ type, props, children }),
+  useState: initial => [initial, noop],
+  useEffect: noop,
+}
 
-const React = { createElement: () => {}, useState: () => [], useEffect: () => {} }
-const required = []
+const cache = new Map()
+const styleTags = []
+const loaded = []
+
+function requireImpl(specifier) {
+  if (specifier === 'react') return React
+  if (!specifier.startsWith(`${PACKAGE}/`)) {
+    throw new Error(`client-modules: ${PACKAGE}/client.js requested external "${specifier}"`)
+  }
+  const file = specifier.slice(PACKAGE.length + 1)
+  if (!CLIENT_CHUNK.test(file)) {
+    throw new Error(`client-modules: cannot resolve chunk "${file}" — the name must match client.*.js`)
+  }
+  if (!cache.has(file)) {
+    // Seed first so a require cycle degrades to a placeholder rather than
+    // recursing forever; the real exports replace it below.
+    cache.set(file, { exports: {} })
+    loaded.push(file)
+    cache.set(file, { exports: evaluate(file, requireImpl, styleTags) })
+  }
+  return cache.get(file).exports
+}
+
 let exports
 try {
-  exports = registration.factory(specifier => {
-    required.push(specifier)
-    if (specifier === 'react') return React
-    throw new Error(`client-modules: dsh-plus-plus/client.js requested external "${specifier}" before the module system existed`)
-  })
+  exports = evaluate('client.js', requireImpl, styleTags)
 } catch (error) {
-  console.log('FACTORY THREW   :', error.message)
+  console.log('ENTRY THREW     :', error.message)
   process.exit(1)
 }
 
-console.log('required specs  :', JSON.stringify(required))
-console.log('exports keys    :', Object.keys(exports))
+console.log('entry id        :', PACKAGE)
+console.log('chunks resolved :', loaded.join(', ') || 'none')
+console.log('exports         :', Object.keys(exports).join(', '))
 console.log('typeof apply    :', typeof exports.apply)
-console.log('typeof name     :', typeof exports.name)
+console.log('inject          :', JSON.stringify([...exports.inject]))
 console.log('toStringTag     :', Object.prototype.toString.call(exports))
 
-// The loader requires `inject` to name services it waits for before calling apply.
-const inject = exports.inject
-console.log('inject          :', JSON.stringify([...(inject ?? [])]))
-
-// Apply with a minimal context to see whether registration itself throws.
-const noop = () => {}
-const seen = []
+const effects = []
+const slots = []
+const namespaces = []
 try {
   exports.apply({
-    effect: (fn, label) => { const d = fn(); seen.push(label); return typeof d === 'function' ? d : noop },
-    locale: { register: () => noop, bind: () => key => key },
-    slots: { inject: () => noop, register: () => noop },
+    effect(fn, label) {
+      const dispose = fn()
+      effects.push(label)
+      return typeof dispose === 'function' ? dispose : noop
+    },
+    locale: {
+      register(ns) { namespaces.push(ns); return noop },
+      bind: () => key => key,
+    },
+    slots: {
+      inject(key, callback) { callback(); return noop },
+      register(options) { slots.push(`${options.name}/${options.id}`); return noop },
+    },
   })
-  console.log('apply ok        :', seen.join(', '))
-  console.log('style tags      :', styleTags.length, '·', styleTags[0]?.textContent?.length ?? 0, 'bytes')
+  console.log('apply ok        :', effects.join(', '))
+  console.log('dictionaries    :', namespaces.join(', '))
+  console.log('slots           :', slots.join(', '))
+  console.log('style tags      :', styleTags.length)
+  for (const tag of styleTags) {
+    const label = tag.getAttribute?.('data-feature') ?? '(unlabelled)'
+    console.log(`  ${String(label).padStart(8)}  ${(tag.textContent ?? '').length} bytes`)
+  }
 } catch (error) {
   console.log('APPLY THREW     :', error.message)
+  process.exit(1)
+}
+
+const core = cache.get('client.core.js')?.exports
+if (core !== undefined) {
+  console.log('features        :', core.listFeatures().map(f => `${f.id}@${f.order}`).join(', '))
 }

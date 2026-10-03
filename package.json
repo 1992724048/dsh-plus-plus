@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "DSH Plus Plus —— DeepSeek Harness 多功能增强插件。当前提供随包分发的字体栈：JetBrains Mono 优先，鸿蒙字体兜底中文。",
+  "description": "DSH Plus Plus —— DeepSeek Harness 多功能增强插件。随包分发字体栈（JetBrains Mono + 鸿蒙），界面直角化，按功能分模块可扩展。",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
+    "./client.*": "./client.*",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -19,6 +20,7 @@
   "files": [
     "index.js",
     "client.js",
+    "client.*.js",
     "src",
     "icon.svg",
     "cordis.patch.yml",
