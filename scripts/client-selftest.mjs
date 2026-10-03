@@ -168,6 +168,22 @@ test('the bundle references no free variable the loader does not provide', () =>
   }
 })
 
+test('the bundle patch registers exactly one row, on the bare package name', () => {
+  // Two shell constraints, verified against the `client-modules` source, that are
+  // easy to violate and invisible until the plugin fails to boot:
+  //
+  //  - ONE client half per package: the registry resolves `exports["./client"]`
+  //    (singular) and `parseDshClient` accepts no `components` field.
+  //  - the client half binds to the BARE package name: a subpath row carries none.
+  const patch = fs.readFileSync(path.join(ROOT, 'cordis.patch.yml'), 'utf8')
+  const rows = [...patch.matchAll(/^\s*-\s+id:\s*(\S+)\s*$/gm)].map(m => m[1])
+  const names = [...patch.matchAll(/^\s*name:\s*'?([^'\s]+)'?\s*$/gm)].map(m => m[1])
+
+  assert.equal(rows.length, 1, `the patch must insert exactly one row, found ${rows.length}`)
+  assert.deepEqual(names, [PACKAGE], `the row must name the bare package; got ${names.join(', ')}`)
+  assert.ok(rows.every(id => !id.includes('/')), 'a row id must not be a subpath')
+})
+
 test('every chunk filename satisfies the loader naming rule', () => {
   for (const file of fs.readdirSync(ROOT).filter(name => /^client\..*\.js$/.test(name))) {
     assert.match(file, CLIENT_CHUNK, `${file} is not a valid client chunk name`)

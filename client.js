@@ -24,7 +24,7 @@ window.__ModuleLoader__.load({
     const { createElement: h } = React
 
     const core = require('dsh-plus-plus/client.core.js')
-    const { defineFeature, listFeatures, dictionaries } = core
+    const { listFeatures, dictionaries } = core
 
     /**
      * The feature chunks, in boot order.

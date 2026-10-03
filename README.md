@@ -44,6 +44,22 @@ scripts/           自测与探针
 "./client.*": "./client.*"
 ```
 
+### 一个包只有一个浏览器半身
+
+宿主的多组件机制是**多个 bundle 各占一行**，不是单个 bundle 内部拆。这不是设计
+偏好，是壳里的硬约束（`client-modules` 源码可查）：
+
+- 注册表只解析 `exports["./client"]`（**单数**），`parseDshClient` 只接受
+  `platform` / `inject` / `external` / `immediately` 四个键——**没有 `components`**。
+- 浏览器半身绑定在 `name` 为**裸包名**的那一行上；子路径行不带半身。
+
+所以 `cordis.patch.yml` 只有一行，功能靠 `client.*.js` 分包，而不是多几行
+`insert`。自测里有一条专门守这个：`the bundle patch registers exactly one row,
+on the bare package name`——写成子路径会静默变成"只有宿主、没有浏览器"。
+
+真要让每个功能成为独立可插拔的插件，得拆成多个 npm 包各自一行，代价是失去共享
+的 core 层。
+
 ### core 提供什么
 
 功能 chunk 不碰 `document`、不注册 locale、也不管样式表什么时候被移除：
@@ -120,13 +136,13 @@ base64 这些字体。宿主因此用一条 `prefix` 路由 `/api/dsh-plus-plus/
 npm test
 ```
 
-27 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
-扩展名白名单），浏览器侧 18 项（入口解析、`apply()` 跑完、不引用 loader 未提供的
-自由变量、chunk 文件名合规、**磁盘上的 chunk 与入口 require 完全一致**、core 单例、
-每个功能声明完整、启动顺序递增、重复 id 抛错、双语不平衡报错并指出键名、合并后字典
-平衡、设置页组合出每节、effect 不重复注册、每条 `@import` 都指向磁盘上真实存在且在
-包根内的文件、宿主字体变量被重指向、六个圆角 token 归零、扫除规则带 `!important`
-且没有全局 `corner-shape`）。
+28 项自测：宿主侧 9 项（路由注册与卸载、MIME 与缓存头、相对 URL 解析、穿越防护、
+扩展名白名单），浏览器侧 19 项（入口解析、`apply()` 跑完、不引用 loader 未提供的
+自由变量、**patch 只有一行且用裸包名**、chunk 文件名合规、**磁盘上的 chunk 与入口
+require 完全一致**、core 单例、每个功能声明完整、启动顺序递增、重复 id 抛错、
+双语不平衡报错并指出键名、合并后字典平衡、设置页组合出每节、effect 不重复注册、
+每条 `@import` 都指向磁盘上真实存在且在包根内的文件、宿主字体变量被重指向、
+六个圆角 token 归零、扫除规则带 `!important` 且没有全局 `corner-shape`）。
 
 > 「磁盘上的 chunk 与入口 require 完全一致」是防漂移那一条：磁盘上有但没人 require
 > 的是死代码；require 了但磁盘上没有的，会在浏览器里加载失败。
@@ -240,6 +256,10 @@ junction 落到 `D:\CODE\dsh-plus-plus\node_modules`。`npm run probe:install` �
   插样式表请用 `document.createElement('style')`（参考插件 `dsh-our-free-model`
   就是这么做的）。
   顺带：`Builtin` inspect 会把 `styles` 列为内建，容易误以为两条路径都有。
+- **一个包只有一个浏览器半身。** `exports["./client"]` 是单数，`parseDshClient` 只认
+  `platform` / `inject` / `external` / `immediately`，**没有 `components`**；而且半身
+  绑定在 `name` 为裸包名的那一行，子路径行不带半身。宿主的多组件是「多 bundle
+  各占一行」，不是「一个 bundle 内拆」。详见「结构」。
 
 ## 下一步
 

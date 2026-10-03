@@ -1,8 +1,19 @@
 # dsh-plus-plus bundle patch.
 #
 # One `insert` line mounts the Host half. The browser half is declared by the
-# `dsh.client` block in package.json and binds to this same bare-package-name row
-# (sub-path rows do not carry a client half).
+# `dsh.client` block in package.json and binds to this same bare-package-name row.
+#
+# Two hard constraints, both verified against the shell's `client-modules` source:
+#
+# 1. ONE client half per package. The registry resolves `exports["./client"]`
+#    (singular), and `parseDshClient` accepts only platform / inject / external /
+#    immediately — there is no `components` field. A package therefore has exactly
+#    one browser entry, which is why the features live in sibling `client.*.js`
+#    chunks required from `client.js` rather than as extra rows here.
+#
+# 2. The client half binds to the BARE package name. A row naming a subpath
+#    carries no client half, so `name: 'dsh-plus-plus/client.font'` would silently
+#    load the host half with no browser half at all.
 #
 # Keep the id and the bare package name aligned: the id is the Loader entry id,
 # the name is the package specifier the kernel resolves against this workspace.
