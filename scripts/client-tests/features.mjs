@@ -196,52 +196,55 @@ test('the labelled triggers are found by structure, not by aria-haspopup', async
   for (const block of hovers) assert.match(block, /background:\s*#ededed/)
 })
 
-test('the model trigger may shrink, and clips what does not fit', async () => {
-  // The host already handles "the name does not fit": a ResizeObserver on the
-  // control groups sets --dsh-composer-model-text-display to none on the row when
-  // they cannot share a line, swapping the name for a bare icon.
+test('the model trigger may shrink, and its text is pinned visible', async () => {
+  // Two mechanisms in the host hide the model name, and both have to be answered.
   //
-  // An earlier version fought that mechanism instead of using it, and produced the
-  // visible bug this now guards: max-width:none plus flex:none plus a label pinned
-  // to display:inline and flex-shrink:0 left nothing able to shrink and nothing
-  // able to clip, so the text ran straight outside the button.
+  // The host hides it in compact mode: a ResizeObserver on the control groups sets
+  // a text-display variable the label and effort spans read, and it gives those
+  // spans a flex-shrink of 1000 — a thousand times anything else, so they reach
+  // zero width first while the icon and chevron keep their size. What renders is a
+  // bare square with no text.
   //
-  // So the contract is the opposite of what that version assumed: the trigger must
-  // stay shrinkable, and the box must clip.
+  // An earlier version fought the first mechanism instead of answering it, and
+  // produced the visible overflow bug this now guards: max-width:none plus
+  // flex:none plus unshrinkable text and no overflow left nothing able to shrink
+  // and nothing able to clip, so the text ran outside the button.
   const { css } = await featureOf('composer')
 
+  // Width: the row's share, not unbounded, so the trigger cannot crowd out send.
   const model = /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{\s*max-width:\s*([^;]+);([^}]*)\}/.exec(css)
   assert.ok(model, 'the model trigger must override the shared width')
-  assert.match(model[1], /50cqw/, 'a share of the row, not unbounded — it must not crowd out send')
-  assert.match(model[2], /min-width:\s*0/, 'and min-width:0 so shrinking stays possible')
+  assert.match(model[1], /50cqw/, 'a share of the row')
+  assert.match(model[2], /min-width:\s*0/, 'and min-width:0, so the row can still wrap')
   assert.doesNotMatch(model[2], /flex:\s*none/,
     'flex:none stops the label collapsing to zero width and defeats the host\'s own fallback')
 
-  // The shared rule must clip, so a label that cannot shrink is bounded by the box.
+  // The shared trigger rule clips, which is what keeps forced text inside the box.
   const shared = /\[class\*="_modes"\] button,\s*\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button\s*\{([^}]*)\}/.exec(css)
   assert.ok(shared, 'the shared trigger rule must exist')
   assert.match(shared[1], /overflow:\s*hidden/,
     'the trigger must clip; without it the text runs outside the button')
 
-  // The host's compact-mode pair stays intact, so the fallback can still engage.
+  // The model label must be pinned directly, not through the host's variable.
   //
-  // Declared on the row, not on the button: the row is where the host sets the
-  // variable and the labels inherit from there. An earlier version declared it on
-  // the button, which sits below the row in the inheritance chain, so the row's
-  // value won and the name stayed hidden — a declaration that did nothing.
-  const onRow = /\[data-composer-card\] \[class\*="_row"\]\s*\{([^}]*)\}/
-  const row = onRow.exec(css)
-  assert.ok(row !== undefined, 'the row rule must exist')
-  assert.match(row[1], /--dsh-composer-model-text-display:\s*block/,
-    'the row must show the name — this is the declaration that actually reaches the labels')
-  assert.match(row[1], /--dsh-composer-model-icon-display:\s*none/, 'and hide the icon')
-
-  // The labels' own shrink rate is the other half: the host gives them
-  // flex-shrink of 1000, so they hit zero width long before the icon and chevron.
+  // Three attempts to reach that through the text-display variable failed: on the
+  // button (the row is where the host sets it) and on the row (which says the host
+  // writes an inline style, and an inline style outranks every selector). So the
+  // spans carry !important instead — which does beat a non-important inline style,
+  // and the host's own rule has none.
   const labels = /\[class\*="triggerLabel"\][^{]*\{([^}]*)\}/.exec(css)?.[1]
-  assert.ok(labels, 'the model label must be re-declared')
-  assert.match(labels, /flex:\s*0 0 auto/,
-    'the label must stop shrinking a thousand times faster than the icon')
+  assert.ok(labels, 'the model label must be pinned')
+  assert.match(labels, /display:\s*inline\s*!important/, 'the name must stay visible')
+  assert.match(labels, /flex:\s*0 0 auto\s*!important/,
+    'and stop shrinking a thousand times faster than the icon')
+
+  // The icon is pinned hidden to match, so the compact look cannot half-apply.
+  assert.match(css, /\[class\*="triggerIcon"\][^{]*\{[^}]*display:\s*none\s*!important/,
+    'the compact-mode icon must not appear alongside a forced-visible name')
+
+  // The trigger clips, which is what keeps forced text inside the box.
+  assert.match(shared[1], /overflow:\s*hidden/,
+    'the trigger must clip; without it the text runs outside the button')
 })
 
 test('every control is pinned to the row\'s vertical centre', async () => {

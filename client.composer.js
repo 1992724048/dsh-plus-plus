@@ -243,54 +243,48 @@ window.__ModuleLoader__.load({
   overflow: hidden;
 }
 
-/* The model trigger: wide enough for the name, but still allowed to shrink.
+/* The model trigger's width.
  *
- * The host already solves "the name does not fit" properly. It measures the
- * control groups with a ResizeObserver and, when they cannot share a line, sets
- * --dsh-composer-model-text-display to none on the row, which hides the name and
-   effort spans and shows a bare icon instead. The label carries min-width:0 and
-   overflow:hidden, so the fallback is the host's design, not a defect.
+ * max-width replaces the host's min(360px, 45cqw), which is what left the name
+ * too narrow. It is the row's own share rather than unbounded, so the trigger
+ * cannot crowd out the send button.
  *
- * An earlier version fought that: it set max-width to none, refused to shrink
-   with flex:none, and pinned the label to display:inline with flex-shrink:0. All
-   three broke it. The overflow one was the visible bug — with nothing shrinking
-   and nothing clipping, the text simply ran outside the button. The display one
- * silently disabled the host's own measurement, so the fallback could never
-   engage.
- *
- * So this only replaces the width cap, which is what actually left the name too
- * narrow. It is 50% of the row rather than unbounded, so the trigger cannot crowd
- * out the send button — and min-width:0 alongside it keeps shrinking possible,
- * which is what lets the host fall back to the icon. Everything else is left to
- * the host. */
+ * min-width: 0 keeps the host's own fallback reachable — when the row genuinely has
+ * no room the trigger may still shrink and the row wraps. Nothing here stops that. */
 [data-composer-card] [data-slot="conversation.input.model"] button {
   max-width: 50cqw;
   min-width: 0;
 }
 
-/* Keep the model name and effort visible; the icon stays hidden.
+/* The model's own text, forced visible.
  *
- * Declared on the **row**, which is where the host sets it. The row carries the
- * compact-mode variable and the label and effort spans inherit it from there; an
- * earlier version declared the same pair on the button, which sits *below* the row
- * in the inheritance chain, so the row's own none value won and the declaration did
- * nothing — the name stayed hidden and the button rendered as a bare icon.
+ * The host hides it in compact mode. A ResizeObserver on the control groups sets a
+ * text-display variable that the label and effort spans read, and it also gives
+ * those spans a flex-shrink of 1000 — a thousand times the rate of anything else,
+ * so they reach zero width first while the icon and chevron keep their size. What
+ * renders is a bare square with no text at all.
  *
- * The labels' own flex value is what actually keeps the name on screen. The host
- * gives them flex-shrink of 1000, so they reach zero width far faster than the
- * icon or the chevron keep their size — which is exactly the bare-square result.
+ * Three attempts to reach that through the variable did not work, and this one
+ * stops trying. Declaring it on the button does nothing, because the row is where
+ * the host sets it. Declaring it on the row does nothing either, which says the
+ * host writes it as an inline style — and an inline style outranks every selector
+ * at every level, so no declaration in this sheet can beat it.
  *
- * The button keeps min-width:0, so the trigger as a whole may still shrink if the
- * row genuinely has no room, and the row wraps. That is the host's own fallback,
- * left intact rather than fought. */
-[data-composer-card] [class*="_row"] {
-  --dsh-composer-model-text-display: block;
-  --dsh-composer-model-icon-display: none;
-}
-
+ * So the spans are pinned directly. !important does outrank a non-important inline
+ * style, and the host's own rule carries none, as its bundled source shows. The
+ * icon is pinned hidden to match, so the compact look cannot half-apply.
+ *
+ * Overflow is already clipped by the shared trigger rule above, so forcing the
+ * text visible cannot push it outside the box — that was the overflow bug, and it
+ * was fixed at the clip, not by hiding the text. */
 [data-composer-card] [data-slot="conversation.input.model"] [class*="triggerLabel"],
 [data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"] {
-  flex: 0 0 auto;
+  display: inline !important;
+  flex: 0 0 auto !important;
+}
+
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerIcon"] {
+  display: none !important;
 }
 
 [data-composer-card] [class*="_modes"] button:hover:not(:disabled),
