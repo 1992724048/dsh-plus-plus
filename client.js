@@ -1,19 +1,3 @@
-/**
- * DSH Plus Plus — browser half (entry).
- *
- * This file is deliberately thin. It does three things and nothing else:
- *
- *   1. loads the feature chunks and the core layer;
- *   2. binds the locale, so a feature contributes a dictionary rather than
- *      registering one;
- *   3. renders one settings page that composes each feature's own section.
- *
- * Everything a feature actually does lives in its chunk. Adding one is a new
- * `client.<name>.js` plus one line in {@link CHUNKS} — this file does not change.
- *
- * Hand-written ModuleLoader bundle: no build step, no dependency beyond the
- * `react` the shell already provides.
- */
 window.__ModuleLoader__.load({
   id: 'dsh-plus-plus',
   factory: require => {
@@ -23,39 +7,16 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const { createElement: h } = React
 
-    /**
-     * The chunks this entry pulls in, in boot order. The first must be the core.
-     *
-     * `require.async('./<name>')` is the only way to reach a sibling chunk. Two
-     * facts about the shell's `require` make that unavoidable:
-     *
-     *  - plain `require(spec)` is a **synchronous module-table lookup**. It answers a
-     *    platform seed word (`react`, `react-dom`, `react/jsx-runtime`,
-     *    `@deepseek-ai/cordis`, `@deepseek-ai/dsh-client-store`,
-     *    `@deepseek-ai/dsh-client-ui-slots`, `@deepseek-ai/dsh-client-ui-primitives`,
-     *    `@deepseek-ai/dsh-client-ui-dockkit`) or an already-materialized graph row,
-     *    and throws `missed the module table` for anything else. A package's own
-     *    chunk is neither, so `require('dsh-plus-plus/client.core.js')` fails the
-     *    whole entry at boot.
-     *
-     *  - `require.async(spec)` is the chunk path, and it only accepts a **relative**
-     *    `./name.js` whose name matches `client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js`. It
-     *    returns a promise, so the load below is async by necessity — which is fine,
-     *    because the shell awaits a client's `apply` before using it.
-     *
-     * The names are relative because that is what `require.async` accepts; the
-     * `dsh-plus-plus/` prefix only works for Node's own resolver (npm pack, tests).
-     */
     const CHUNKS = [
       './client.core.js',
       './client.font.js',
       './client.shape.js',
       './client.composer.js',
+      './client.composer.css.js',
+      './client.session.js',
       './client.surface.js',
     ]
 
-    // ── page chrome ────────────────────────────────────────────────────────────
-    /** Styling for the page frame. Every selector is scoped under `.pp-`. */
     const PAGE_CSS = `
 .pp-page { display: flex; flex-direction: column; gap: 22px; padding: 4px 2px 24px; }
 .pp-section { display: flex; flex-direction: column; gap: 8px; }
@@ -89,7 +50,6 @@ window.__ModuleLoader__.load({
 }
 `.trim()
 
-    /** One settings page: a frame, then each feature's own section in boot order. */
     function SettingsPage({ t, listFeatures }) {
       const features = listFeatures().filter(feature => typeof feature.settings === 'function')
       return h('div', { className: 'pp-page' }, [
@@ -105,22 +65,10 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    // ── registration ───────────────────────────────────────────────────────────
-    /**
-     * `apply` receives the client context from the loader, once per client run.
-     * Every registration hangs off `ctx.effect` so a fiber unload tears it down.
-     *
-     * It is async because the chunks have to be fetched first: `require.async`
-     * returns a promise, and the shell awaits this function's result.
-     */
     async function apply(ctx) {
       const loaded = []
       for (const name of CHUNKS) loaded.push(await require.async(name))
 
-      // CHUNKS[0] is the core chunk; the rest are feature chunks. Each feature
-      // exports a descriptor rather than registering itself, because `defineFeature`
-      // lives in core and core is only reachable asynchronously — so the entry is
-      // the one place where both halves meet.
       const core = loaded[0]
       const { defineFeature, listFeatures, dictionaries } = core
 
@@ -128,10 +76,6 @@ window.__ModuleLoader__.load({
         if (chunk?.descriptor !== undefined) defineFeature(chunk.descriptor)
       }
 
-      // One namespace, one registration. Each feature's dictionary is namespaced by
-      // its id, and the halves are kept separate while flattening *within* a half —
-      // so `locale.register`'s balance check still runs exactly once, and so
-      // `core.dictionaries` can name the offending key before we ever get there.
       const DICT = dictionaries('settings.plusPlus', {
         zh: {
           'nav': 'Plus Plus',
@@ -156,13 +100,8 @@ window.__ModuleLoader__.load({
       ctx.effect(() => ctx.locale.register('settings.plusPlus', halves), 'dsh-plus-plus: dictionaries')
       const t = ctx.locale.bind('settings.plusPlus')
 
-      // The page frame's own stylesheet, inserted before the feature sheets so a
-      // feature can override the frame if it ever needs to. `registerStyles` opens
-      // the effect itself, so calling it directly avoids nesting two.
       core.registerStyles(ctx, PAGE_CSS, 'page')
 
-      // Features, in declared order. `apply` is async because a chunk reaches core
-      // through `require.async`, so each one is awaited.
       for (const feature of listFeatures()) {
         if (typeof feature.apply !== 'function') continue
         await feature.apply(ctx)
