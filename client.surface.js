@@ -13,19 +13,19 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'surface.title': '界面底色',
-        'surface.subtitle': '主题背景图铺满整个窗口；侧边栏与顶部标题栏单层半透明并模糊；会话功能栏半透明悬浮于内容之上，消息可滚入其下；内容区铺白色文章卡片，底部输入框除外；右侧会话面板改为浮动模糊窗口，高度与会话内容区一致，不再挤压聊天宽度。',
+        'surface.subtitle': '主题背景图铺满整个窗口；工作区侧边栏与顶部标题栏提到80%不透明并模糊；会话功能栏80%半透明悬浮于内容之上，消息可滚入其下；内容区铺白色文章卡片，底部输入框除外；右侧会话面板浮动模糊、高度与会话内容区一致，且压在输入框、回到底部按钮与记录导航条之上。',
       },
       en: {
         'surface.title': 'Surfaces',
-        'surface.subtitle': 'A themed backdrop fills the window; the sidebar and title bar wash it once with blur; the conversation bar veils and floats above the thread, which scrolls beneath it; the thread keeps its white article card; the right panel floats as a blurred window at the content area height instead of squeezing the chat.',
+        'surface.subtitle': 'A themed backdrop fills the window; the sidebar and title bar wash it at 80% with blur; the conversation bar veils and floats above the thread, which scrolls beneath it; the thread keeps its white article card; the right panel floats as a blurred window at the content area height, stacked above the composer, the to-bottom button and the turn navigator.',
       },
     }
 
     const PALETTE = {
       '--dsw-alias-bg-base': { light: 'rgb(249 250 251)', dark: 'rgb(28 28 30)' },
       '--dsw-specific-sidebar-fill': {
-        light: 'linear-gradient(rgb(255 255 255 / 65%), rgb(255 255 255 / 65%)), url("/api/dsh-plus-plus/assets/bk.jpg") fixed center / cover no-repeat, rgb(255 255 255)',
-        dark: 'linear-gradient(rgb(20 20 22 / 65%), rgb(20 20 22 / 65%)), url("/api/dsh-plus-plus/assets/bg.jpg") fixed center / cover no-repeat, rgb(20 20 22)',
+        light: 'linear-gradient(rgb(255 255 255 / 80%), rgb(255 255 255 / 80%)), url("/api/dsh-plus-plus/assets/bk.jpg") fixed center / cover no-repeat, rgb(255 255 255)',
+        dark: 'linear-gradient(rgb(20 20 22 / 80%), rgb(20 20 22 / 80%)), url("/api/dsh-plus-plus/assets/bg.jpg") fixed center / cover no-repeat, rgb(20 20 22)',
       },
       '--pp-surface-chat-image': {
         light: 'url("/api/dsh-plus-plus/assets/bk.jpg")',
@@ -36,6 +36,10 @@ window.__ModuleLoader__.load({
         dark: 'rgb(255 255 255 / 12%)',
       },
       '--pp-surface-header-veil': {
+        light: 'rgb(255 255 255 / 80%)',
+        dark: 'rgb(20 20 22 / 80%)',
+      },
+      '--pp-surface-panel-veil': {
         light: 'rgb(255 255 255 / 65%)',
         dark: 'rgb(20 20 22 / 65%)',
       },
@@ -100,11 +104,15 @@ html [class*="_frame"] > [class*="_rightbarCol"] {
   top: var(--dsh-frame-top-clearance, 0px);
   right: 0;
   bottom: 0;
-  z-index: 6;
-  background-color: var(--pp-surface-header-veil);
+  z-index: 10;
+  background-color: var(--pp-surface-panel-veil);
   -webkit-backdrop-filter: blur(var(--pp-surface-blur));
   backdrop-filter: blur(var(--pp-surface-blur));
   border-left: .5px solid var(--dsw-alias-border-l3);
+}
+
+html [class*="_body"] > [class*="_workspaceRow"] {
+  z-index: 4 !important;
 }
 
 html [class*="_frame"][data-rightbar-collapsed] > [class*="_rightbarCol"] {

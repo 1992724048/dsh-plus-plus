@@ -1054,8 +1054,8 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
   const { palette, css } = await featureOf('surface')
   assert.deepEqual(
     [...Object.keys(palette)].sort(),
-    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-article-card', '--pp-surface-blur', '--pp-surface-chat-image', '--pp-surface-header-veil'],
-    'the swap owns the two column tokens plus its own backdrop, card, blur and header tokens, and nothing else',
+    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-article-card', '--pp-surface-blur', '--pp-surface-chat-image', '--pp-surface-header-veil', '--pp-surface-panel-veil'],
+    'the swap owns the two column tokens plus its own backdrop, card, blur, header and panel tokens, and nothing else',
   )
   assert.deepEqual(
     Object.keys(palette).filter(token => token.startsWith('--dsw-')).sort(),
@@ -1078,18 +1078,18 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
       `${scheme}: the sidebar paints the window image itself — its opaque layer hides every consumer stacked below it`)
     assert.match(sidebar, / fixed center \/ cover no-repeat, rgb\(/,
       `${scheme}: pinned to the viewport so every consumer renders the identical crop`)
-    assert.match(sidebar, /\/ 65%\)/,
-      `${scheme}: the sidebar wash must match the conversation bar's 65% veil — the user asked for one opacity everywhere`)
+    assert.match(sidebar, /\/ 80%\)/,
+      `${scheme}: the sidebar wash was asked to be more opaque — 80%, matching the conversation bar`)
   }
 })
 
 test('the conversation header floats and veils over the thread, with no blur', async () => {
   const { palette, css } = await featureOf('surface')
 
-  assert.equal(palette['--pp-surface-header-veil'].light, 'rgb(255 255 255 / 65%)',
-    'light: a white veil over the backdrop')
-  assert.equal(palette['--pp-surface-header-veil'].dark, 'rgb(20 20 22 / 65%)',
-    'dark: a dark veil over the backdrop')
+  assert.equal(palette['--pp-surface-header-veil'].light, 'rgb(255 255 255 / 80%)',
+    'light: a white veil over the backdrop, raised to 80%')
+  assert.equal(palette['--pp-surface-header-veil'].dark, 'rgb(20 20 22 / 80%)',
+    'dark: a dark veil over the backdrop, likewise')
 
   const rule = /html \[data-slot="conversation\.header"\] > \*\s*\{([^}]*)\}/.exec(css)
   assert.ok(rule, 'the header element must carry the veil')
@@ -1130,7 +1130,7 @@ test('the window title bar is a translucent blurred strip', async () => {
 })
 
 test('the session side panel floats over the thread instead of squeezing it', async () => {
-  const { css } = await featureOf('surface')
+  const { css, palette } = await featureOf('surface')
 
   const grid = /html\[data-windows-titlebar\] \[class\*="_frame"\]:not\(\[data-rightbar-collapsed\]\)\s*\{([^}]*)\}/.exec(css)
   assert.ok(grid, 'the frame must reclaim the track when the panel is open')
@@ -1144,8 +1144,19 @@ test('the session side panel floats over the thread instead of squeezing it', as
   assert.match(panel[1], /top:\s*var\(--dsh-frame-top-clearance, 0px\)/,
     'its top edge must meet the conversation content area, never covering the title bar strip')
   assert.match(panel[1], /right:\s*0(?![\w-])/, 'pinned to the right edge')
+  assert.match(panel[1], /z-index:\s*10(?![\d])/,
+    'above the composer seat, the to-bottom button and the turn navigator, yet below the drag handles and the overlay layer')
   assert.match(panel[1], /backdrop-filter:\s*blur\(var\(--pp-surface-blur\)\)/, 'translucent and blurred')
-  assert.match(panel[1], /background-color:\s*var\(--pp-surface-header-veil\)/, 'veiled from the palette')
+  assert.match(panel[1], /background-color:\s*var\(--pp-surface-panel-veil\)/,
+    'its own veil, so the opacity raise on the bar does not reach the floating window')
+
+  assert.equal(palette['--pp-surface-panel-veil'].light, 'rgb(255 255 255 / 65%)',
+    'the panel keeps the translucency it was asked for')
+
+  const hero = /html \[class\*="_body"\] > \[class\*="_workspaceRow"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(hero, 'the session info row must be addressed')
+  assert.match(hero[1], /z-index:\s*4 !important/,
+    'it sat at 10 — equal to the panel — and ties resolve by tree order, so it is lowered outright')
 
   const closed = /html \[class\*="_frame"\]\[data-rightbar-collapsed\] > \[class\*="_rightbarCol"\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(closed, 'the closed panel must be addressed')
