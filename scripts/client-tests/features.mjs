@@ -1023,10 +1023,12 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
     assert.notEqual(chat, sidebar, `${scheme}: the two columns must end up different`)
     assert.match(chat, /^rgb\(/, `${scheme}: chat must be a concrete colour, not a var() cycle`)
     assert.match(sidebar, /^rgb\(/, `${scheme}: sidebar must be a concrete colour`)
+    assert.match(sidebar, /\/ \d+%\)$/,
+      `${scheme}: the sidebar fill must be a translucent wash — the title bar shares this token and both must read the backdrop through it`)
   }
 })
 
-test('the chat column carries the themed backdrop image', async () => {
+test('the backdrop fills the window and every image layer shares one crop', async () => {
   const { palette, css } = await featureOf('surface')
 
   const image = palette['--pp-surface-chat-image']
@@ -1035,11 +1037,24 @@ test('the chat column carries the themed backdrop image', async () => {
   assert.equal(image.dark, 'url("/api/dsh-plus-plus/assets/bg.jpg")',
     'dark: the backdrop is bg')
 
+  const frame = /html \[class\*="_frame"\]:has\(> \[class\*="_sidebarCol"\]\)\s*\{([^}]*)\}/.exec(css)
+  assert.ok(frame, 'the window frame must carry the image')
+  assert.match(frame[1], /background-image:\s*var\(--pp-surface-chat-image\)/,
+    'the whole window must take its image from the palette')
+
+  const root = /html \[class\*="_root"\]:has\(\[data-conversation-region="chat"\]\)\s*\{([^}]*)\}/.exec(css)
+  assert.ok(root, 'the conversation column must carry the image under its header too')
+
   const rule = /\[data-conversation-region="chat"\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(rule, 'the chat region must carry the image rule')
   assert.match(rule[1], /background-image:\s*var\(--pp-surface-chat-image\)/,
     'the image must come from the palette so the host can flip it with the scheme')
   assert.match(rule[1], /background-size:\s*cover/, 'and cover the column')
+
+  for (const [name, match] of [['frame', frame], ['root', root], ['chat', rule]]) {
+    assert.match(match[1], /background-attachment:\s*fixed/,
+      `${name}: every image layer must be pinned to the viewport crop, or the pattern jumps at each boundary`)
+  }
 
   assert.doesNotMatch(css, /assets\/bk\.jpg/,
     'the stylesheet must not hard-code an image URL — only the palette may name it')
