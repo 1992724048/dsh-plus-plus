@@ -518,6 +518,8 @@ test('the permission button is borderless and coloured by its mode', async () =>
   // invariant a palette edit can silently break.
   const fills = ['readonly', 'workspace', 'full'].map(m => palette['--pp-composer-permission-' + m].dark)
   assert.equal(new Set(fills).size, 3, 'the three modes must be three colours; got ' + fills.join(' '))
+  assert.deepEqual(fills, ['#67C23A', '#409EFF', '#E6A23C'],
+    'the asked-for mode colours: view-only green, workspace blue, full-access orange')
   for (const mode of ['readonly', 'workspace', 'full']) {
     const fill = palette['--pp-composer-permission-' + mode].dark
     const ink = palette['--pp-composer-permission-' + mode + '-ink'].dark
@@ -674,6 +676,43 @@ test('the attach, model and send buttons are borderless, and the model sits 4px 
   // than the row gutter the inner groups use.
   assert.doesNotMatch(trailing[1], /var\(--pp-composer-block-gap\)/,
     'the model-to-send gap must be literal, not tied to the row gutter')
+})
+
+test('the composer icons are thin and stable while the thread scrolls', async () => {
+  const { css, palette } = await featureOf('composer')
+
+  const icons = /\[data-composer-card\] button\[aria-haspopup="listbox"\] > svg,\s*\n\[data-composer-card\] \[class\*="_trailing"\] > button:last-of-type > svg\s*\{([^}]*)\}/.exec(css)
+  assert.ok(icons, 'the attach and send glyphs share one size rule')
+  assert.match(icons[1], /width:\s*16px/, 'an 18px render fattened a 14px glyph — thin it to 16')
+  assert.doesNotMatch(icons[1], /18px/, 'and no 18px may remain')
+
+  const stroke = /button\[aria-haspopup="listbox"\] > svg path\[stroke="currentColor"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(stroke, 'the plus stroke needs its own rule')
+  assert.match(stroke[1], /stroke-width:\s*1\.3(?![\d.])/, 'the hairline was forced to 1.6 — thin it back')
+
+  const generic = /\[data-composer-card\] :is\(button, \[role="button"\]\)\s*\{([^}]*)\}/.exec(css)
+  assert.ok(generic, 'the generic control rule must exist')
+  assert.doesNotMatch(generic[1], /backdrop-filter/,
+    'a backdrop-filtered button re-rasters against the scrolled backdrop and drags its glyph with it')
+
+  const attachment = palette['--pp-composer-attachment']
+  assert.equal(attachment.light, '#F56C6C', 'light: the image chip is red')
+  assert.equal(attachment.dark, '#F56C6C', 'dark: and stays red')
+  assert.equal(palette['--pp-composer-attachment-ink'].light, '#fff', 'with a white icon')
+
+  const tile = /\[data-slot="conversation\.input\.attachments"\] \[class\*="_thumbnail"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(tile, 'the image chip must carry its own tile rule')
+  assert.match(tile[1], /background:\s*var\(--pp-composer-attachment\)/, 'red fill from the palette')
+  assert.doesNotMatch(tile[1], /#/, 'and no literal may paint it')
+
+  const preview = /\[class\*="_thumbnail"\] img\s*\{([^}]*)\}/.exec(css)
+  assert.ok(preview, 'the preview must be addressed')
+  assert.match(preview[1], /display:\s*none/, 'the chip is a red tile, so the preview img stays out of it')
+
+  const glyph = /\[class\*="_thumbnail"\]::after\s*\{([^}]*)\}/.exec(css)
+  assert.ok(glyph, 'the icon must be drawn by the chip itself')
+  assert.match(glyph[1], /-webkit-mask:\s*url\("data:image\/svg\+xml/, 'a masked glyph, not an emoji')
+  assert.match(glyph[1], /background:\s*var\(--pp-composer-attachment-ink\)/, 'painted white from the palette')
 })
 
 test('the send button is found structurally, not via a slot that hides', async () => {
@@ -1015,8 +1054,8 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
   const { palette, css } = await featureOf('surface')
   assert.deepEqual(
     [...Object.keys(palette)].sort(),
-    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-article-card', '--pp-surface-chat-image', '--pp-surface-header-veil'],
-    'the swap owns the two column tokens plus its own backdrop, card and header tokens, and nothing else',
+    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-article-card', '--pp-surface-blur', '--pp-surface-chat-image', '--pp-surface-header-veil'],
+    'the swap owns the two column tokens plus its own backdrop, card, blur and header tokens, and nothing else',
   )
   assert.deepEqual(
     Object.keys(palette).filter(token => token.startsWith('--dsw-')).sort(),
@@ -1039,12 +1078,12 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
       `${scheme}: the sidebar paints the window image itself — its opaque layer hides every consumer stacked below it`)
     assert.match(sidebar, / fixed center \/ cover no-repeat, rgb\(/,
       `${scheme}: pinned to the viewport so every consumer renders the identical crop`)
-    assert.match(sidebar, /\/ 50%\)/,
-      `${scheme}: one translucent tint above the image — stacking stays uniform instead of banding at the bottom`)
+    assert.match(sidebar, /\/ 65%\)/,
+      `${scheme}: the sidebar wash must match the conversation bar's 65% veil — the user asked for one opacity everywhere`)
   }
 })
 
-test('the conversation header carries a translucent veil', async () => {
+test('the conversation header floats, veils and blurs over the thread', async () => {
   const { palette, css } = await featureOf('surface')
 
   assert.equal(palette['--pp-surface-header-veil'].light, 'rgb(255 255 255 / 65%)',
@@ -1056,6 +1095,60 @@ test('the conversation header carries a translucent veil', async () => {
   assert.ok(rule, 'the header element must carry the veil')
   assert.match(rule[1], /background-color:\s*var\(--pp-surface-header-veil\)/,
     'the veil must come from the palette so the host can flip it with the scheme')
+  assert.match(rule[1], /position:\s*absolute(?![\w-])/,
+    'only an out-of-flow header lets the thread scroll up beneath it')
+  assert.match(rule[1], /z-index:\s*5/, 'and stay above the messages it covers')
+  assert.match(rule[1], /backdrop-filter:\s*blur\(var\(--pp-surface-blur\)\)/,
+    'the blur must come from the palette')
+
+  const scroller = /html \[data-conversation-scroll\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(scroller, 'the thread must start below the floating header')
+  assert.match(scroller[1], /padding-top:\s*var\(--pp-header-height, 76px\)/,
+    'pushed by the measured header height, so the first message is never hidden')
+
+  const { readCode } = await import('./harness.mjs')
+  const source = readCode('client.surface.js')
+  assert.match(source, /ResizeObserver/,
+    'the header height is measured, not guessed — the host ships it at min-height and it can grow')
+  assert.match(source, /if \(header === watched\) return/,
+    'and it is re-measured across a session switch, when the header remounts')
+})
+
+test('the window title bar is a translucent blurred strip', async () => {
+  const { palette, css } = await featureOf('surface')
+  assert.equal(palette['--pp-surface-blur'].light, '16px', 'light: one blur for every surface')
+  assert.equal(palette['--pp-surface-blur'].dark, '16px', 'dark: and the same again')
+
+  const strip = /html\[data-windows-titlebar\] \[class\*="_frame"\]::before\s*\{([^}]*)\}/.exec(css)
+  assert.ok(strip, 'the Windows title strip must carry its own rule')
+  assert.match(strip[1], /background-image:\s*none(?![\w-])/,
+    'the strip must give up the opaque image, or the backdrop behind it has nothing to blur')
+  assert.match(strip[1], /background-color:\s*var\(--pp-surface-header-veil\)/,
+    'a translucent veil instead')
+  assert.match(strip[1], /backdrop-filter:\s*blur\(var\(--pp-surface-blur\)\)/,
+    'and the frosted blur the user asked for')
+})
+
+test('the session side panel floats over the thread instead of squeezing it', async () => {
+  const { css } = await featureOf('surface')
+
+  const grid = /html\[data-windows-titlebar\] \[class\*="_frame"\]:not\(\[data-rightbar-collapsed\]\)\s*\{([^}]*)\}/.exec(css)
+  assert.ok(grid, 'the frame must reclaim the track when the panel is open')
+  assert.match(grid[1], /grid-template-columns:\s*var\(--dsh-windows-sidebar-width\) minmax\(0, 1fr\) !important/,
+    'author !important outranks the inline template, so the chat gets its width back')
+  assert.match(grid[1], /!important(?![\w-])/, 'without it the inline style wins and the chat stays squeezed')
+
+  const panel = /html \[class\*="_frame"\] > \[class\*="_rightbarCol"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(panel, 'the panel column must carry its own rule')
+  assert.match(panel[1], /position:\s*absolute(?![\w-])/, 'out of flow, so it overlays instead of pushing')
+  assert.match(panel[1], /right:\s*0(?![\w-])/, 'pinned to the right edge')
+  assert.match(panel[1], /backdrop-filter:\s*blur\(var\(--pp-surface-blur\)\)/, 'translucent and blurred')
+  assert.match(panel[1], /background-color:\s*var\(--pp-surface-header-veil\)/, 'veiled from the palette')
+
+  const closed = /html \[class\*="_frame"\]\[data-rightbar-collapsed\] > \[class\*="_rightbarCol"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(closed, 'the closed panel must be addressed')
+  assert.match(closed[1], /display:\s*none/,
+    'once out of the grid the host no longer clips an empty column — it has to be hidden by hand')
 })
 
 test('the backdrop fills the window and every image layer shares one crop', async () => {

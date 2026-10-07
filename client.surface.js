@@ -13,19 +13,19 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'surface.title': '界面底色',
-        'surface.subtitle': '主题背景图铺满整个窗口（浅色 bk、暗色 bg）；侧边栏与顶部标题栏在其上单层半透明、底部不再叠色；会话标题栏加半透明蒙层；内容区像博客文章一样铺白色卡片，底部输入框与按钮除外。',
+        'surface.subtitle': '主题背景图铺满整个窗口；侧边栏与顶部标题栏单层半透明并模糊；会话功能栏半透明模糊、悬浮于内容之上，消息可滚入其下；内容区铺白色文章卡片，底部输入框除外；右侧会话面板改为浮动模糊窗口，不再挤压聊天宽度。',
       },
       en: {
         'surface.title': 'Surfaces',
-        'surface.subtitle': 'A themed backdrop fills the whole window (bk in light, bg in dark); the sidebar and title bar wash it once, without stacking into a band at the bottom; the conversation header gets a translucent veil; the thread sits on a white article card, composer excluded.',
+        'surface.subtitle': 'A themed backdrop fills the window; the sidebar and title bar wash it once with blur; the conversation bar veils, blurs and floats above the thread, which scrolls beneath it; the thread keeps its white article card; the right panel floats as a blurred window instead of squeezing the chat.',
       },
     }
 
     const PALETTE = {
       '--dsw-alias-bg-base': { light: 'rgb(249 250 251)', dark: 'rgb(28 28 30)' },
       '--dsw-specific-sidebar-fill': {
-        light: 'linear-gradient(rgb(255 255 255 / 50%), rgb(255 255 255 / 50%)), url("/api/dsh-plus-plus/assets/bk.jpg") fixed center / cover no-repeat, rgb(255 255 255)',
-        dark: 'linear-gradient(rgb(20 20 22 / 50%), rgb(20 20 22 / 50%)), url("/api/dsh-plus-plus/assets/bg.jpg") fixed center / cover no-repeat, rgb(20 20 22)',
+        light: 'linear-gradient(rgb(255 255 255 / 65%), rgb(255 255 255 / 65%)), url("/api/dsh-plus-plus/assets/bk.jpg") fixed center / cover no-repeat, rgb(255 255 255)',
+        dark: 'linear-gradient(rgb(20 20 22 / 65%), rgb(20 20 22 / 65%)), url("/api/dsh-plus-plus/assets/bg.jpg") fixed center / cover no-repeat, rgb(20 20 22)',
       },
       '--pp-surface-chat-image': {
         light: 'url("/api/dsh-plus-plus/assets/bk.jpg")',
@@ -39,6 +39,7 @@ window.__ModuleLoader__.load({
         light: 'rgb(255 255 255 / 65%)',
         dark: 'rgb(20 20 22 / 65%)',
       },
+      '--pp-surface-blur': { light: '16px', dark: '16px' },
     }
 
     const CSS = `
@@ -70,8 +71,46 @@ html [class*="_root"]:has([data-conversation-region="chat"]) {
   background-repeat: no-repeat;
 }
 
-html [data-slot="conversation.header"] > * {
+html[data-windows-titlebar] [class*="_frame"]::before {
+  background-image: none;
   background-color: var(--pp-surface-header-veil);
+  -webkit-backdrop-filter: blur(var(--pp-surface-blur));
+  backdrop-filter: blur(var(--pp-surface-blur));
+}
+
+html [data-slot="conversation.header"] > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  background-color: var(--pp-surface-header-veil);
+  -webkit-backdrop-filter: blur(var(--pp-surface-blur));
+  backdrop-filter: blur(var(--pp-surface-blur));
+}
+
+html [data-conversation-scroll] {
+  padding-top: var(--pp-header-height, 76px);
+}
+
+html[data-windows-titlebar] [class*="_frame"]:not([data-rightbar-collapsed]) {
+  grid-template-columns: var(--dsh-windows-sidebar-width) minmax(0, 1fr) !important;
+}
+
+html [class*="_frame"] > [class*="_rightbarCol"] {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  background-color: var(--pp-surface-header-veil);
+  -webkit-backdrop-filter: blur(var(--pp-surface-blur));
+  backdrop-filter: blur(var(--pp-surface-blur));
+  border-left: .5px solid var(--dsw-alias-border-l3);
+}
+
+html [class*="_frame"][data-rightbar-collapsed] > [class*="_rightbarCol"] {
+  display: none;
 }
 
 [data-conversation-scroll]::before {
@@ -110,6 +149,31 @@ html [data-slot="conversation.header"] > * {
         const { registerStyles, applyPalette } = await core()
         applyPalette(ctx, PALETTE, 'surface')
         registerStyles(ctx, CSS, 'surface')
+
+        ctx.effect(() => {
+          let observer
+          let watched = null
+
+          const poll = setInterval(() => {
+            const anchor = document.querySelector('[data-slot="conversation.header"]')
+            const header = anchor?.firstElementChild ?? null
+            if (header === watched) return
+            if (observer) observer.disconnect()
+            watched = header
+            observer = undefined
+            if (header === null) return
+            observer = new ResizeObserver(() => {
+              document.documentElement.style.setProperty('--pp-header-height', `${header.offsetHeight}px`)
+            })
+            observer.observe(header)
+            document.documentElement.style.setProperty('--pp-header-height', `${header.offsetHeight}px`)
+          }, 250)
+
+          return () => {
+            clearInterval(poll)
+            if (observer) observer.disconnect()
+          }
+        }, 'dsh-plus-plus: conversation header')
       },
     }
     return module.exports

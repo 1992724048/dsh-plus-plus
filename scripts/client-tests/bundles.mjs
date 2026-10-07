@@ -84,6 +84,7 @@ test('the stylesheet only reaches for font assets', async () => {
   const { styleTags } = await bootRun()
   const css = styleTags.map(node => node.textContent ?? '').join('\n')
   for (const url of [...css.matchAll(/url\("([^"]+)"\)/g)].map(m => m[1])) {
+    if (url.startsWith('data:')) continue
     const extension = url.split('?')[0].split('.').pop()
     assert.ok(['woff2', 'woff', 'css'].includes(extension), `${url} is not a font asset`)
   }
