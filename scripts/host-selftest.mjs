@@ -29,9 +29,10 @@ const test = (name, fn) => tests.push([name, fn])
  * composition-level contract. `shared` lets a second stub stand in for a reloaded
  * module instance talking to the same server.
  */
-function createStub({ shared, strict } = {}) {
+function createStub({ shared, strict, webServerReady = true } = {}) {
   const routes = shared ?? []
   const events = []
+  const injections = []
   // The service object is created once and handed out on every `get`. Returning a
   // fresh object each call would make every `apply` see a different server, which
   // is not how a Cordis service behaves — and it would hide exactly the
@@ -50,17 +51,43 @@ function createStub({ shared, strict } = {}) {
       }
     },
   }
-  return {
+  const ctx = {
     routes,
     events,
     webServer,
     get(name) {
-      return name === 'webServer' ? webServer : undefined
+      return name === 'webServer' && webServerReady ? webServer : undefined
     },
     emit(...args) {
       events.push(args)
     },
+    inject(names, callback) {
+      const pending = { names, callback, release: undefined, disposed: false }
+      injections.push(pending)
+      flush()
+      return {
+        dispose() {
+          if (pending.disposed) return
+          pending.disposed = true
+          const index = injections.indexOf(pending)
+          if (index >= 0) injections.splice(index, 1)
+          pending.release?.()
+        },
+      }
+    },
   }
+  function flush() {
+    for (const pending of [...injections]) {
+      if (pending.disposed || !pending.names.every(name => ctx.get(name) !== undefined)) continue
+      injections.splice(injections.indexOf(pending), 1)
+      pending.release = pending.callback(ctx) ?? undefined
+    }
+  }
+  ctx.startWebServer = () => {
+    webServerReady = true
+    flush()
+  }
+  return ctx
 }
 
 /** The route serving `path`, whichever order it was registered in. */
@@ -116,6 +143,17 @@ test('registers one prefix route per feature and tears them all down', () => {
 
   dispose()
   assert.equal(ctx.routes.length, 0, 'every route must be removed on teardown')
+})
+
+test('the routes install when the webServer service appears, not only at apply time', () => {
+  const ctx = createStub({ webServerReady: false })
+  plugin.apply(ctx)
+  assert.equal(ctx.routes.length, 0,
+    'nothing may register before the service exists')
+
+  ctx.startWebServer()
+  assert.deepEqual(ctx.routes.map(route => route.path).sort(), [FONT_ROUTE, SESSION_ROUTE].sort(),
+    'the loader starts rows concurrently, so apply runs while webServer is still coming up — a one-shot get there registers nothing and the browser DELETE falls through to the /api channel as "not found"')
 })
 
 test('both font packages resolve to an asset root', () => {

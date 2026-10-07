@@ -6,10 +6,13 @@ export { FONT_ROUTE, SESSION_ROUTE }
 export const inject = []
 
 export function apply(ctx) {
-  const disposeFonts = installFontRoutes({ ctx })
-  const disposeSessions = installSessionRoutes({ ctx })
-  return () => {
-    disposeFonts()
-    disposeSessions()
-  }
+  const install = ctx.inject(['webServer'], (webCtx) => {
+    const disposeFonts = installFontRoutes({ ctx: webCtx })
+    const disposeSessions = installSessionRoutes({ ctx: webCtx })
+    return () => {
+      disposeFonts()
+      disposeSessions()
+    }
+  })
+  return () => install.dispose()
 }
