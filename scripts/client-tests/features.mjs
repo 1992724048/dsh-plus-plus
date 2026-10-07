@@ -622,6 +622,19 @@ test("every host permission label maps to a mode", async () => {
     'an unknown label must not map to any mode')
 })
 
+test('the permission watcher re-acquires the button after a session switch', async () => {
+  const { readCode } = await import('./harness.mjs')
+  const source = readCode('client.composer.js')
+
+  assert.match(source, /if \(button === watched\) return/,
+    'the poll must keep running and skip only while the same button element stays mounted')
+  assert.equal([...source.matchAll(/clearInterval\(poll\)/g)].length, 1,
+    'the poll must survive finding its button — only the effect cleanup may stop it, '
+    + 'or every session switch leaves the new button unwatched and uncoloured')
+  assert.match(source, /if \(typeof watching === 'function'\) watching\(\)/,
+    'the replaced button\'s observer must be torn down with it')
+})
+
 test('the attach, model and send buttons are borderless, and the model sits 4px from the send button', async () => {
   // Three small asks on the same controls. None of them may be folded into the
   // shared trigger rule, because that rule is shared with the permission button and
@@ -1002,8 +1015,8 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
   const { palette, css } = await featureOf('surface')
   assert.deepEqual(
     [...Object.keys(palette)].sort(),
-    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-chat-image'],
-    'the swap owns the two column tokens plus its own backdrop token, and nothing else',
+    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-article-card', '--pp-surface-chat-image'],
+    'the swap owns the two column tokens plus its own backdrop and card tokens, and nothing else',
   )
   assert.deepEqual(
     Object.keys(palette).filter(token => token.startsWith('--dsw-')).sort(),
@@ -1060,4 +1073,23 @@ test('the backdrop fills the window and every image layer shares one crop', asyn
     'the stylesheet must not hard-code an image URL — only the palette may name it')
   assert.doesNotMatch(rule[1], /background:\s/,
     'the backdrop must add an image layer, never replace the column colour')
+})
+
+test('the thread sits on a translucent article card that stops above the composer', async () => {
+  const { palette, css } = await featureOf('surface')
+
+  const card = palette['--pp-surface-article-card']
+  assert.equal(card.light, 'rgb(255 255 255 / 85%)', 'light: a white paper column')
+  assert.equal(card.dark, 'rgb(255 255 255 / 12%)', 'dark: a translucent white wash, not a slab')
+
+  const rule = /\[data-conversation-scroll\]::before\s*\{([^}]*)\}/.exec(css)
+  assert.ok(rule, 'the card must hang off the scroller, not the body')
+  assert.match(rule[1], /bottom:\s*var\(--dsh-composer-height, 0px\)/,
+    'the seat height is measured onto the scroller — the card must stop exactly above it, since the composer is excluded')
+  assert.match(rule[1], /width:\s*calc\(var\(--dsh-chat-content-width[^)]*\)\s*\+ 48px\)/,
+    'the card follows the content column, blog-article style')
+  assert.match(rule[1], /background:\s*var\(--pp-surface-article-card\)/,
+    'the fill must come from the palette')
+  assert.match(rule[1], /z-index:\s*-1/, 'behind the messages, above the backdrop')
+  assert.match(rule[1], /pointer-events:\s*none/, 'and it must never swallow a click')
 })

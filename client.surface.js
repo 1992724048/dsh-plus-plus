@@ -13,11 +13,11 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'surface.title': '界面底色',
-        'surface.subtitle': '主题背景图铺满整个窗口（浅色 bk、暗色 bg）；侧边栏与顶部标题栏半透明，透出底图；聊天区保留自己的图层，正文底色不变。',
+        'surface.subtitle': '主题背景图铺满整个窗口（浅色 bk、暗色 bg）；侧边栏与顶部标题栏半透明，透出底图；会话内容区像博客文章一样铺白色半透明卡片，底部输入框与按钮除外。',
       },
       en: {
         'surface.title': 'Surfaces',
-        'surface.subtitle': 'A themed backdrop fills the whole window (bk in light, bg in dark); the sidebar and the top title bar stay translucent above it, the chat keeps its own layer, and the base colour is untouched.',
+        'surface.subtitle': 'A themed backdrop fills the whole window (bk in light, bg in dark); the sidebar and the top title bar stay translucent above it; the thread sits on a white translucent article card, with the composer and its buttons left off it.',
       },
     }
 
@@ -27,6 +27,10 @@ window.__ModuleLoader__.load({
       '--pp-surface-chat-image': {
         light: 'url("/api/dsh-plus-plus/assets/bk.jpg")',
         dark: 'url("/api/dsh-plus-plus/assets/bg.jpg")',
+      },
+      '--pp-surface-article-card': {
+        light: 'rgb(255 255 255 / 85%)',
+        dark: 'rgb(255 255 255 / 12%)',
       },
     }
 
@@ -57,6 +61,20 @@ html [class*="_root"]:has([data-conversation-region="chat"]) {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+}
+
+[data-conversation-scroll]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: var(--dsh-composer-height, 0px);
+  left: 0;
+  right: 0;
+  width: calc(var(--dsh-chat-content-width, 680px) + 48px);
+  margin-inline: auto;
+  background: var(--pp-surface-article-card);
+  pointer-events: none;
+  z-index: -1;
 }
 `.trim()
 

@@ -91,24 +91,21 @@ window.__ModuleLoader__.load({
         registerStyles(ctx, `${declaration.CSS}\n${declaration.SEAT_CSS}`, 'composer')
 
         ctx.effect(() => {
-          let stopWatching
-          let ticks = 0
+          let watching
+          let watched = null
 
           const poll = setInterval(() => {
             const slot = document.querySelector(PERMISSION_SLOT)
-            const button = slot?.querySelector('button')
-            if (button === undefined || button === null) {
-              if (++ticks > 40) clearInterval(poll)
-              return
-            }
-
-            clearInterval(poll)
-            stopWatching = watchPermission(button)
+            const button = slot?.querySelector('button') ?? null
+            if (button === watched) return
+            if (typeof watching === 'function') watching()
+            watched = button
+            watching = button === null ? undefined : watchPermission(button)
           }, 250)
 
           return () => {
             clearInterval(poll)
-            if (typeof stopWatching === 'function') stopWatching()
+            if (typeof watching === 'function') watching()
           }
         }, 'dsh-plus-plus: permission mode')
       },
