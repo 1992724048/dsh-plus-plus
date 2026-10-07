@@ -15,8 +15,8 @@ const MIME = Object.freeze({
 const ALLOWED_EXTENSIONS = new Set(Object.keys(MIME))
 
 export const FONT_STACK = Object.freeze({
-  mono: ['JetBrains Mono', 'HarmonyOS Sans', 'ui-monospace', 'monospace'],
-  sans: ['HarmonyOS Sans', 'system-ui', 'sans-serif'],
+  mono: ['JetBrains Mono', 'HarmonyOS Sans SC', 'ui-monospace', 'monospace'],
+  sans: ['HarmonyOS Sans SC', 'system-ui', 'sans-serif'],
 })
 
 export const FAMILIES = Object.freeze(['jetbrains-mono', 'harmonyos-sans-sc'])

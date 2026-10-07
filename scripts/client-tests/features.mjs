@@ -40,8 +40,26 @@ test('the host font variables are re-pointed at our stacks', async () => {
   assert.equal(declared('--dsw-font-family'), 'var(--pp-font-sans)')
   assert.equal(declared('--ds-font-family-code'), 'var(--pp-font-mono)')
   assert.match(declared('--pp-font-mono') ?? '', /^'JetBrains Mono'/)
-  assert.match(declared('--pp-font-sans') ?? '', /^'HarmonyOS Sans'/)
+  assert.match(declared('--pp-font-sans') ?? '', /^'HarmonyOS Sans SC'/)
   assert.doesNotMatch(css, /^\s*html\s*,/m, 'an element rule loses to any class selector')
+})
+
+test('the CJK fallback the stacks name is the family the packaged faces declare', async () => {
+  const css = allCss((await bootRun()).styleTags)
+  const { default: fs } = await import('node:fs')
+  const { default: path } = await import('node:path')
+  const { ROOT } = await import('./harness.mjs')
+  const face = path.resolve(ROOT, 'node_modules',
+    'harmonyos-sans-webfont-splitted/dist/HarmonyOS_Sans_SC/Regular.css')
+  const family = /font-family:\s*"([^"]+)"/.exec(fs.readFileSync(face, 'utf8'))?.[1]
+  assert.ok(family, 'the HarmonyOS sheet must declare a font-family')
+  const { FONT_STACK } = await import('../../src/fonts.js')
+  assert.ok(FONT_STACK.mono.includes(family),
+    `the code stack must fall back to "${family}" before the generic monospace`)
+  assert.ok(FONT_STACK.sans.includes(family),
+    `the body stack must fall back to "${family}"`)
+  assert.ok(css.includes(`'${family}'`),
+    `the served variables must reference "${family}" — a name the faces never declare matches nothing and drops Chinese to the system font`)
 })
 
 test('every @import points at a route the host actually serves', async () => {

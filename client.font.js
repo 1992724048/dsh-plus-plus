@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
       },
       en: {
         'font.title': 'Fonts',
-        'font.subtitle': 'JetBrains Mono first, HarmonyOS Sans as the Chinese fallback — both from npm dependencies, never from the system.',
+        'font.subtitle': 'JetBrains Mono first, HarmonyOS Sans SC as the Chinese fallback — both from npm dependencies, never from the system.',
         'font.stack': 'Current stack',
         'font.sans': 'Body',
         'font.mono': 'Monospace',
@@ -45,15 +45,15 @@ window.__ModuleLoader__.load({
 
     const PROBES = [
       ['JetBrains Mono', `${FONT_ROUTE}/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2`],
-      ['HarmonyOS Sans', `${FONT_ROUTE}/harmonyos-sans-sc/Regular.css`],
+      ['HarmonyOS Sans SC', `${FONT_ROUTE}/harmonyos-sans-sc/Regular.css`],
     ]
 
     const CSS = `
 @import ${SHEETS.map(entry => `url("${FONT_ROUTE}/${entry.family}/${entry.file}")`).join('\n@import ')};
 
 :root {
-  --pp-font-mono: 'JetBrains Mono', 'HarmonyOS Sans', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --pp-font-sans: 'HarmonyOS Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --pp-font-mono: 'JetBrains Mono', 'HarmonyOS Sans SC', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --pp-font-sans: 'HarmonyOS Sans SC', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --dsw-font-family: var(--pp-font-sans);
   --ds-font-family-code: var(--pp-font-mono);
   --dsw-font: var(--pp-font-sans);
