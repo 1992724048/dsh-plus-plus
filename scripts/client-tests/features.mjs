@@ -228,11 +228,13 @@ test('the labelled triggers are found by structure, not by aria-haspopup', async
   assert.equal([...css.matchAll(/background:\s*var\(--pp-composer-trigger\)/g)].length, 1,
     'the trigger fill must be declared once')
   const hovers = [...css.matchAll(/\[class\*="_modes"\] button:hover[^{]*\{([^}]*)\}/g)].map(m => m[1])
-  assert.ok(hovers.length > 0, 'the triggers need a hover of their own')
+  assert.ok(hovers.length > 0, 'the _modes triggers need a hover of their own')
   for (const block of hovers) {
     assert.match(block, /background:\s*var\(--pp-composer-trigger-hover\)/,
-      'the labelled triggers hover on their own palette value — not the accent yellow')
+      'the _modes triggers hover on their own palette value — the model trigger took the accent yellow instead')
   }
+  assert.doesNotMatch(css, /\[data-slot="conversation\.input\.model"\] button:hover[^{]*\{[^}]*trigger-hover/,
+    'the model hover must be fully moved off the trigger value, not declared twice')
 })
 
 test('the attach and send buttons hover yellow, cross-fading over 200ms', async () => {
@@ -245,15 +247,16 @@ test('the attach and send buttons hover yellow, cross-fading over 200ms', async 
   assert.equal(palette['--pp-composer-accent-transition'].light, '200ms')
   assert.equal(palette['--pp-composer-accent-transition'].dark, '200ms')
 
-  // Both accent controls must carry the hover…
+  // The accent controls plus the model trigger must carry the hover…
   for (const [name, anchor] of [
     ['attach', /\[data-composer-card\] button\[aria-haspopup="listbox"\]:hover:not\(:disabled\)/],
     ['send', /\[data-composer-card\] \[class\*="_trailing"\] > button:last-of-type:hover:not\(:disabled\)/],
+    ['model', /\[data-composer-card\] \[data-slot="conversation\.input\.model"\] button:hover:not\(:disabled\)/],
   ]) {
     assert.match(css, anchor, `${name} must have a hover rule`)
   }
-  assert.equal([...css.matchAll(/var\(--pp-composer-accent-hover\)/g)].length, 2,
-    'exactly the two accent controls use it — the labelled triggers must not')
+  assert.equal([...css.matchAll(/var\(--pp-composer-accent-hover\)/g)].length, 3,
+    'attach, send and the model trigger use it — the _modes triggers must not')
 
   // …and the transition must sit on the **resting** state, not on the hover. A
   // transition declared only while hovered animates into the state and snaps out
@@ -275,13 +278,14 @@ test('the attach and send buttons hover yellow, cross-fading over 200ms', async 
   // second line for the colour, so each control contributes two matches and a
   // count of 2 would only ever match a single-property transition.
   //
-  // Six, not four: the permission trigger also declares the same 200ms pair for its
+  // Eight, not six: the permission trigger also declares the same 200ms pair for its
   // mode colours, so the two accent controls plus the permission rule contribute
-  // three declarations each with two properties. Asserting exactly 4 here would be
-  // asserting that the permission button does not cross-fade, which is not the
-  // intent — the per-control loop above is what pins those two.
-  assert.equal([...css.matchAll(/--pp-composer-accent-transition\) ease/g)].length, 6,
-    'all three animated controls declare the transition, for background and colour')
+  // three declarations each with two properties — and the model trigger now joins
+  // them, having taken the send button's hover. Asserting a smaller number here
+  // would be asserting that one of these controls does not cross-fade, which is not
+  // the intent — the per-control loop above is what pins those three.
+  assert.equal([...css.matchAll(/--pp-composer-accent-transition\) ease/g)].length, 8,
+    'all four animated controls declare the transition, for background and colour')
 })
 
 test('the model name and effort are pinned visible', async () => {
@@ -451,26 +455,25 @@ test('the composer palette is declared for both schemes', async () => {
     }
   }
 
-  // The whole composer inverts with the theme, and the editor stays translucent in
-  // both. This is the contract three rounds of fixes were converging on without
-  // stating it: the editor is a 50% wash either way, and everything sitting on it —
-  // the labelled triggers and the accent pair — takes that scheme's own value.
-  assert.equal(get('--pp-composer-surface', 'light'), 'rgb(0 0 0 / 50%)',
-    'light: the editor is a translucent black wash')
+  // The editor stays translucent in both schemes, and every surface on it reads
+  // white now: the light scheme was asked back to white (it had been inverted to
+  // black). The ink and the hairline are what still flip with the theme.
+  assert.equal(get('--pp-composer-surface', 'light'), 'rgb(255 255 255 / 50%)',
+    'light: the editor is a translucent white wash')
   assert.equal(get('--pp-composer-surface', 'dark'), 'rgb(255 255 255 / 50%)',
     'dark: the editor is a translucent white wash')
 
-  // Labelled triggers: the scheme's own colour, with the ink flipped so a glyph on a
-  // white button is black and vice versa.
-  assert.equal(get('--pp-composer-trigger', 'light'), '#000', 'light: the triggers are black')
+  // Labelled triggers: white surfaces in both schemes, with dark ink — a glyph on
+  // a white button has to be black, in both.
+  assert.equal(get('--pp-composer-trigger', 'light'), '#fff', 'light: the triggers are white')
   assert.equal(get('--pp-composer-trigger', 'dark'), '#fff', 'dark: the triggers are white')
-  assert.equal(get('--pp-composer-trigger-ink', 'light'), '#fff', 'light: their labels are white')
+  assert.equal(get('--pp-composer-trigger-ink', 'light'), '#000', 'light: their labels are black')
   assert.equal(get('--pp-composer-trigger-ink', 'dark'), '#000', 'dark: their labels are black')
 
-  // Attach and send follow the same pairing.
-  assert.equal(get('--pp-composer-accent', 'light'), '#000', 'light: attach and send are black')
+  // Attach, send and model follow the same pairing.
+  assert.equal(get('--pp-composer-accent', 'light'), '#fff', 'light: attach and send are white')
   assert.equal(get('--pp-composer-accent', 'dark'), '#fff', 'dark: attach and send are white')
-  assert.equal(get('--pp-composer-accent-ink', 'light'), '#fff', 'light: their glyphs are white')
+  assert.equal(get('--pp-composer-accent-ink', 'light'), '#000', 'light: their glyphs are black')
   assert.equal(get('--pp-composer-accent-ink', 'dark'), '#000', 'dark: their glyphs are black')
 
   // A fill and its ink must never be the same value, in either scheme — that is
@@ -619,19 +622,20 @@ test("every host permission label maps to a mode", async () => {
     'an unknown label must not map to any mode')
 })
 
-test('the model trigger is borderless and sits 4px from the send button', async () => {
-  // Two small asks on the same control. Both are deliberately *not* folded into the
+test('the attach and model triggers are borderless, and the model sits 4px from the send button', async () => {
+  // Three small asks on the same controls. None of them may be folded into the
   // shared trigger rule, because that rule is shared with the permission button and
   // changing it there would move a control the user did not ask about.
   const { css } = await featureOf('composer')
 
-  // Borderless. The shared rule sets a hairline on both labelled triggers; this is
-  // the model's half of it removed, and the permission button keeps its own.
-  //
-  // Read through rulesMatching rather than by regex, because the shared rule names
-  // the model trigger as its *second* selector and a naive match finds that one
-  // first — which is the shared fill, not the override, and would report the border
-  // as present when it has been removed. Only the standalone rule can override.
+  // Borderless. The generic control rule gives every button a hairline; the attach
+  // trigger removes its own inside the accent rule it shares with its structural
+  // fallback, and the model removes its in the standalone override below.
+  const attach = rulesMatching(css, 'button[aria-haspopup="listbox"]')
+    .find(rule => /border:\s*0/.test(rule.body))
+  assert.ok(attach, 'the attach trigger must carry its own borderless declaration')
+  assert.doesNotMatch(attach.body, /border:\s*1px/, 'and must not reinstate the hairline')
+
   const overrides = rulesMatching(css, '[data-slot="conversation.input.model"] button')
     .filter(rule => !rule.selector.includes(','))
   const model = overrides.find(rule => /border:\s*0/.test(rule.body))

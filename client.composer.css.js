@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     const module = { exports: {} }
 
     const PALETTE = {
-      '--pp-composer-surface': { light: 'rgb(0 0 0 / 50%)', dark: 'rgb(255 255 255 / 50%)' },
+      '--pp-composer-surface': { light: 'rgb(255 255 255 / 50%)', dark: 'rgb(255 255 255 / 50%)' },
       '--pp-composer-blur': { light: '16px', dark: '16px' },
       '--pp-composer-placeholder-ink': { light: 'rgb(0 0 0 / 62%)', dark: 'rgb(255 255 255 / 78%)' },
       '--pp-composer-permission-readonly': { light: '#b3e19d', dark: '#b3e19d' },
@@ -16,17 +16,17 @@ window.__ModuleLoader__.load({
       '--pp-composer-permission-focus': { light: '#ffee22', dark: '#ffee22' },
       '--pp-composer-permission-focus-ink': { light: '#000', dark: '#000' },
       '--pp-composer-permission-hover': { light: 'rgb(255 255 255 / 18%)', dark: 'rgb(255 255 255 / 18%)' },
-      '--pp-composer-trigger': { light: '#000', dark: '#fff' },
-      '--pp-composer-trigger-ink': { light: '#fff', dark: '#000' },
-      '--pp-composer-trigger-hover': { light: 'rgb(0 0 0 / 14%)', dark: 'rgb(255 255 255 / 14%)' },
-      '--pp-composer-accent': { light: '#000', dark: '#fff' },
-      '--pp-composer-accent-ink': { light: '#fff', dark: '#000' },
+      '--pp-composer-trigger': { light: '#fff', dark: '#fff' },
+      '--pp-composer-trigger-ink': { light: '#000', dark: '#000' },
+      '--pp-composer-trigger-hover': { light: 'rgb(255 255 255 / 14%)', dark: 'rgb(255 255 255 / 14%)' },
+      '--pp-composer-accent': { light: '#fff', dark: '#fff' },
+      '--pp-composer-accent-ink': { light: '#000', dark: '#000' },
       '--pp-composer-accent-hover': { light: '#ffee22', dark: '#ffee22' },
       '--pp-composer-accent-hover-ink': { light: '#000', dark: '#000' },
       '--pp-composer-accent-transition': { light: '200ms', dark: '200ms' },
       '--pp-composer-stroke': { light: 'rgb(0 0 0 / 16%)', dark: 'rgb(255 255 255 / 22%)' },
-      '--pp-composer-control': { light: 'rgb(0 0 0 / 12%)', dark: 'rgb(255 255 255 / 12%)' },
-      '--pp-composer-hover': { light: 'rgb(0 0 0 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
+      '--pp-composer-control': { light: 'rgb(255 255 255 / 12%)', dark: 'rgb(255 255 255 / 12%)' },
+      '--pp-composer-hover': { light: 'rgb(255 255 255 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
     }
 
     const SEAT_CSS = `
@@ -115,13 +115,14 @@ window.__ModuleLoader__.load({
   max-width: 340px;
   background: var(--pp-composer-trigger);
   color: var(--pp-composer-trigger-ink);
-  border-color: var(--pp-composer-stroke);
   overflow: hidden;
 }
 
 [data-composer-card] [data-slot="conversation.input.model"] button {
   min-width: 0;
   border: 0;
+  transition: background-color var(--pp-composer-accent-transition) ease,
+              color var(--pp-composer-accent-transition) ease;
 }
 
 [data-composer-card] [data-slot="conversation.input.model"] [class*="triggerLabel"],
@@ -134,9 +135,13 @@ window.__ModuleLoader__.load({
   display: none !important;
 }
 
-[data-composer-card] [class*="_modes"] button:hover:not(:disabled),
-[data-composer-card] [data-slot="conversation.input.model"] button:hover:not(:disabled) {
+[data-composer-card] [class*="_modes"] button:hover:not(:disabled) {
   background: var(--pp-composer-trigger-hover);
+}
+
+[data-composer-card] [data-slot="conversation.input.model"] button:hover:not(:disabled) {
+  background: var(--pp-composer-accent-hover);
+  color: var(--pp-composer-accent-hover-ink);
 }
 
 [data-composer-card] [data-slot="conversation.input.permission"] button {
@@ -194,6 +199,7 @@ window.__ModuleLoader__.load({
 [data-composer-card] button[aria-haspopup="listbox"],
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
   background: var(--pp-composer-accent);
+  border: 0;
   color: var(--pp-composer-accent-ink);
   transition: background-color var(--pp-composer-accent-transition) ease,
               color var(--pp-composer-accent-transition) ease;

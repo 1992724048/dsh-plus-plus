@@ -61,11 +61,11 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'composer.title': '输入框',
-        'composer.subtitle': '编辑区、工具行、各个按钮各自独立成块。亮色主题下编辑区半透明白色毛玻璃、附件与发送黑底；暗色主题相反。',
+        'composer.subtitle': '编辑区、工具行、各个按钮各自独立成块。两个主题下编辑区均为半透明白色毛玻璃、按钮白色；墨色与描边随主题反转。',
       },
       en: {
         'composer.title': 'Composer',
-        'composer.subtitle': 'The editor, the tool row and every control are their own blocks. Light: a translucent white blurred editor with black attach and send. Dark: reversed.',
+        'composer.subtitle': 'The editor, the tool row and every control are their own blocks. Both schemes: a translucent white blurred editor and white buttons; ink and hairlines follow the theme.',
       },
     }
 
