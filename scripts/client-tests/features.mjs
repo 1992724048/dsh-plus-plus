@@ -534,13 +534,20 @@ test('the permission button is borderless and coloured by its mode', async () =>
       token + ' is a mode colour, not a theme colour — it must not invert')
   }
 
-  // Focus is the yellow, on the background, and outranks the hover.
-  const focus = /button:focus-visible\s*\{([^}]*)\}/.exec(css)
+  // Focus is the host's own ring — the same one the attach button draws, because
+  // the ask was to sync the two, not to invent a second focus language.
+  const focus = /\[data-slot="conversation\.input\.permission"\] button:focus-visible\s*\{([^}]*)\}/.exec(css)
   assert.ok(focus, 'the permission button needs a focus rule')
-  assert.match(focus[1], /background:\s*var\(--pp-composer-permission-focus\)/,
-    'focus must paint the background yellow, as asked')
-  assert.equal(palette['--pp-composer-permission-focus'].dark, '#ffee22',
-    'and it is the same yellow the accent hover already uses')
+  assert.match(focus[1],
+    /outline:\s*var\(--dsw-focus-ring-width\) solid var\(--dsw-focus-ring-color, var\(--dsw-alias-state-business-primary\)\)/,
+    'focus must draw the host ring, exactly as the attach button does')
+  assert.doesNotMatch(focus[1], /background:/,
+    'and must not repaint the mode fill under focus')
+
+  const chevron = /\[data-slot="conversation\.input\.permission"\] \[class\*="_chevron"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(chevron, 'the permission chevron needs its own rule')
+  assert.match(chevron[1], /color:\s*currentColor/,
+    'the caption grey dies on the mode fill — the chevron must take the button ink')
 
   // The mode rules must follow the shared trigger rule or the shared fill wins on
   // source order and the button stays black/white.
@@ -681,10 +688,19 @@ test('the attach, model and send buttons are borderless, and the model sits 4px 
 test('the composer icons are thin and stable while the thread scrolls', async () => {
   const { css, palette } = await featureOf('composer')
 
-  const icons = /\[data-composer-card\] button\[aria-haspopup="listbox"\] > svg,\s*\n\[data-composer-card\] \[class\*="_trailing"\] > button:last-of-type > svg\s*\{([^}]*)\}/.exec(css)
-  assert.ok(icons, 'the attach and send glyphs share one size rule')
-  assert.match(icons[1], /width:\s*16px/, 'an 18px render fattened a 14px glyph — thin it to 16')
-  assert.doesNotMatch(icons[1], /18px/, 'and no 18px may remain')
+  const attach = /\[data-composer-card\] button\[aria-haspopup="listbox"\] > svg\s*\{([^}]*)\}/.exec(css)
+  assert.ok(attach, 'the attach glyph has its own size rule')
+  assert.match(attach[1], /width:\s*16px/, 'an 18px render fattened a 14px glyph — thin it to 16')
+  assert.doesNotMatch(attach[1], /18px/, 'and no 18px may remain')
+
+  const send = /\[data-composer-card\] \[class\*="_trailing"\] > button:last-of-type > svg\s*\{([^}]*)\}/.exec(css)
+  assert.ok(send, 'the send glyph has its own size rule')
+  assert.match(send[1], /width:\s*14px/, 'the send glyph was asked to be thinner than the attach one')
+
+  const stop = /\[class\*="_trailing"\] > button:last-of-type > svg rect\s*\{([^}]*)\}/.exec(css)
+  assert.ok(stop, 'the stop square needs its own rule')
+  assert.match(stop[1], /rx:\s*0(?!\d)/,
+    'the host ships rx="3" on the stop rect — the geometry property is CSS, so flatten it')
 
   const stroke = /button\[aria-haspopup="listbox"\] > svg path\[stroke="currentColor"\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(stroke, 'the plus stroke needs its own rule')
@@ -1083,28 +1099,26 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
   }
 })
 
-test('the conversation header floats and veils over the thread, with no blur', async () => {
-  const { palette, css } = await featureOf('surface')
-
-  assert.equal(palette['--pp-surface-header-veil'].light, 'rgb(255 255 255 / 80%)',
-    'light: a white veil over the backdrop, raised to 80%')
-  assert.equal(palette['--pp-surface-header-veil'].dark, 'rgb(20 20 22 / 80%)',
-    'dark: a dark veil over the backdrop, likewise')
+test('the conversation header floats over the thread, with no blur and no show-through', async () => {
+  const { css } = await featureOf('surface')
 
   const rule = /html \[data-slot="conversation\.header"\] > \*\s*\{([^}]*)\}/.exec(css)
-  assert.ok(rule, 'the header element must carry the veil')
-  assert.match(rule[1], /background-color:\s*var\(--pp-surface-header-veil\)/,
-    'the veil must come from the palette so the host can flip it with the scheme')
+  assert.ok(rule, 'the header element must carry its surface')
+  assert.match(rule[1], /background:\s*var\(--dsw-specific-sidebar-fill\)/,
+    'the layered wash — an opaque image inside the bar, so scrolling content cannot ghost through it')
   assert.match(rule[1], /position:\s*absolute(?![\w-])/,
     'only an out-of-flow header lets the thread scroll up beneath it')
-  assert.match(rule[1], /z-index:\s*5/, 'and stay above the messages it covers')
+  assert.match(rule[1], /z-index:\s*8(?![\d])/,
+    'above the sticky turn navigator and compaction bar at 7, below the seat at 9 and the panel at 10')
   assert.doesNotMatch(rule[1], /backdrop-filter/,
-    'the blur was asked away — the bar keeps only its veil')
+    'the blur was asked away — the bar keeps only its layered wash')
 
   const scroller = /html \[data-conversation-scroll\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(scroller, 'the thread must start below the floating header')
   assert.match(scroller[1], /padding-top:\s*var\(--pp-header-height, 76px\)/,
     'pushed by the measured header height, so the first message is never hidden')
+  assert.match(scroller[1], /scrollbar-gutter:\s*stable/,
+    'the composer re-centres whenever the scrollbar gutter changes width — reserve it, or every glyph shifts')
 
   const { readCode } = await import('./harness.mjs')
   const source = readCode('client.surface.js')
@@ -1118,6 +1132,9 @@ test('the window title bar is a translucent blurred strip', async () => {
   const { palette, css } = await featureOf('surface')
   assert.equal(palette['--pp-surface-blur'].light, '16px', 'light: one blur for every surface')
   assert.equal(palette['--pp-surface-blur'].dark, '16px', 'dark: and the same again')
+  assert.equal(palette['--pp-surface-header-veil'].light, 'rgb(255 255 255 / 80%)',
+    'the strip washes the backdrop at the same 80% the sidebar does')
+  assert.equal(palette['--pp-surface-header-veil'].dark, 'rgb(20 20 22 / 80%)', 'likewise in dark')
 
   const strip = /html\[data-windows-titlebar\] \[class\*="_frame"\]::before\s*\{([^}]*)\}/.exec(css)
   assert.ok(strip, 'the Windows title strip must carry its own rule')
@@ -1162,6 +1179,28 @@ test('the session side panel floats over the thread instead of squeezing it', as
   assert.ok(closed, 'the closed panel must be addressed')
   assert.match(closed[1], /display:\s*none/,
     'once out of the grid the host no longer clips an empty column — it has to be hidden by hand')
+
+  const seat = /html \[class\*="composerSeat"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(seat, 'the composer seat needs an explicit rung')
+  assert.match(seat[1], /z-index:\s*9 !important/,
+    'the host pins it at 7 with triple-class specificity — above the header, below the panel')
+
+  const sessionInfo = /html \[class\*="_heroWorkspaceRow"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(sessionInfo, 'the session info row must be relocated')
+  assert.match(sessionInfo[1], /position:\s*fixed(?![\w-])/,
+    'only fixed escapes the seat layout and lands it in the bar')
+  assert.match(sessionInfo[1], /top:\s*calc\(var\(--dsh-frame-top-clearance, 0px\) \+ var\(--pp-header-height, 76px\)\)/,
+    'anchored to the measured bottom edge of the bar')
+  assert.match(sessionInfo[1], /transform:\s*translateY\(-100%\)/,
+    'sitting above that line = in the bar, on the tabs row')
+
+  const keyframes = /@keyframes pp-panel-in \{([\s\S]*?)\}\s*\n/.exec(css)
+  assert.ok(keyframes, 'the pop-in animation must be declared')
+  assert.match(keyframes[1], /from \{\s*opacity: 0;\s*transform: translateX\(20px\)/,
+    'fade and slide in from the right')
+  const motion = /@media \(prefers-reduced-motion: no-preference\)\s*\{\s*html \[class\*="_frame"\] > \[class\*="_rightbarCol"\] \{([^}]*)\}/.exec(css)
+  assert.ok(motion, 'the animation must sit behind the reduced-motion guard')
+  assert.match(motion[1], /animation:\s*pp-panel-in \.18s ease-out/, 'and run on every open')
 })
 
 test('the backdrop fills the window and every image layer shares one crop', async () => {

@@ -13,8 +13,6 @@ window.__ModuleLoader__.load({
       '--pp-composer-permission-workspace-ink': { light: '#000', dark: '#000' },
       '--pp-composer-permission-full': { light: '#E6A23C', dark: '#E6A23C' },
       '--pp-composer-permission-full-ink': { light: '#000', dark: '#000' },
-      '--pp-composer-permission-focus': { light: '#ffee22', dark: '#ffee22' },
-      '--pp-composer-permission-focus-ink': { light: '#000', dark: '#000' },
       '--pp-composer-permission-hover': { light: 'rgb(255 255 255 / 18%)', dark: 'rgb(255 255 255 / 18%)' },
       '--pp-composer-trigger': { light: '#fff', dark: '#fff' },
       '--pp-composer-trigger-ink': { light: '#000', dark: '#000' },
@@ -171,10 +169,12 @@ window.__ModuleLoader__.load({
 }
 
 [data-composer-card] [data-slot="conversation.input.permission"] button:focus-visible {
-  background: var(--pp-composer-permission-focus);
-  color: var(--pp-composer-permission-focus-ink);
-  outline: 2px solid var(--pp-composer-permission-focus);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
+}
+
+[data-composer-card] [data-slot="conversation.input.permission"] [class*="_chevron"] {
+  color: currentColor;
 }
 
 [data-composer-card] button[aria-haspopup="listbox"],
@@ -184,12 +184,22 @@ window.__ModuleLoader__.load({
   padding: 0;
 }
 
-[data-composer-card] button[aria-haspopup="listbox"] > svg,
-[data-composer-card] [class*="_trailing"] > button:last-of-type > svg {
+[data-composer-card] button[aria-haspopup="listbox"] > svg {
   display: block;
   width: 16px;
   height: 16px;
   shape-rendering: geometricPrecision;
+}
+
+[data-composer-card] [class*="_trailing"] > button:last-of-type > svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  shape-rendering: geometricPrecision;
+}
+
+[data-composer-card] [class*="_trailing"] > button:last-of-type > svg rect {
+  rx: 0;
 }
 
 [data-composer-card] button[aria-haspopup="listbox"] > svg path[stroke="currentColor"] {

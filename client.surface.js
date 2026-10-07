@@ -13,11 +13,11 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'surface.title': '界面底色',
-        'surface.subtitle': '主题背景图铺满整个窗口；工作区侧边栏与顶部标题栏提到80%不透明并模糊；会话功能栏80%半透明悬浮于内容之上，消息可滚入其下；内容区铺白色文章卡片，底部输入框除外；右侧会话面板浮动模糊、高度与会话内容区一致，且压在输入框、回到底部按钮与记录导航条之上。',
+        'surface.subtitle': '主题背景图铺满整个窗口；侧边栏与顶部标题栏80%不透明并模糊；会话功能栏用同款分层底、滚动内容不再透出；会话信息固定到功能栏右下与页签对齐；内容区白色文章卡片；右侧面板弹出式模糊窗口，层级压过输入区与导航条。',
       },
       en: {
         'surface.title': 'Surfaces',
-        'surface.subtitle': 'A themed backdrop fills the window; the sidebar and title bar wash it at 80% with blur; the conversation bar veils and floats above the thread, which scrolls beneath it; the thread keeps its white article card; the right panel floats as a blurred window at the content area height, stacked above the composer, the to-bottom button and the turn navigator.',
+        'surface.subtitle': 'A themed backdrop fills the window; the sidebar and title bar wash it at 80% with blur; the conversation bar layers the same wash so scrolling content no longer ghosts through; the session info pins to the bar beside the tabs; the thread keeps its white article card; the right panel pops in as a blurred window stacked above the composer and the navigator.',
       },
     }
 
@@ -87,12 +87,26 @@ html [data-slot="conversation.header"] > * {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 5;
-  background-color: var(--pp-surface-header-veil);
+  z-index: 8;
+  background: var(--dsw-specific-sidebar-fill);
 }
 
 html [data-conversation-scroll] {
   padding-top: var(--pp-header-height, 76px);
+  scrollbar-gutter: stable;
+}
+
+html [class*="composerSeat"] {
+  z-index: 9 !important;
+}
+
+html [class*="_heroWorkspaceRow"] {
+  position: fixed;
+  top: calc(var(--dsh-frame-top-clearance, 0px) + var(--pp-header-height, 76px));
+  right: 28px;
+  transform: translateY(-100%);
+  margin-top: 0;
+  padding: 0;
 }
 
 html[data-windows-titlebar] [class*="_frame"]:not([data-rightbar-collapsed]) {
@@ -117,6 +131,23 @@ html [class*="_body"] > [class*="_workspaceRow"] {
 
 html [class*="_frame"][data-rightbar-collapsed] > [class*="_rightbarCol"] {
   display: none;
+}
+
+@keyframes pp-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html [class*="_frame"] > [class*="_rightbarCol"] {
+    animation: pp-panel-in .18s ease-out;
+  }
 }
 
 [data-conversation-scroll]::before {
