@@ -1083,7 +1083,7 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
   }
 })
 
-test('the conversation header floats, veils and blurs over the thread', async () => {
+test('the conversation header floats and veils over the thread, with no blur', async () => {
   const { palette, css } = await featureOf('surface')
 
   assert.equal(palette['--pp-surface-header-veil'].light, 'rgb(255 255 255 / 65%)',
@@ -1098,8 +1098,8 @@ test('the conversation header floats, veils and blurs over the thread', async ()
   assert.match(rule[1], /position:\s*absolute(?![\w-])/,
     'only an out-of-flow header lets the thread scroll up beneath it')
   assert.match(rule[1], /z-index:\s*5/, 'and stay above the messages it covers')
-  assert.match(rule[1], /backdrop-filter:\s*blur\(var\(--pp-surface-blur\)\)/,
-    'the blur must come from the palette')
+  assert.doesNotMatch(rule[1], /backdrop-filter/,
+    'the blur was asked away — the bar keeps only its veil')
 
   const scroller = /html \[data-conversation-scroll\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(scroller, 'the thread must start below the floating header')
@@ -1141,6 +1141,8 @@ test('the session side panel floats over the thread instead of squeezing it', as
   const panel = /html \[class\*="_frame"\] > \[class\*="_rightbarCol"\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(panel, 'the panel column must carry its own rule')
   assert.match(panel[1], /position:\s*absolute(?![\w-])/, 'out of flow, so it overlays instead of pushing')
+  assert.match(panel[1], /top:\s*var\(--dsh-frame-top-clearance, 0px\)/,
+    'its top edge must meet the conversation content area, never covering the title bar strip')
   assert.match(panel[1], /right:\s*0(?![\w-])/, 'pinned to the right edge')
   assert.match(panel[1], /backdrop-filter:\s*blur\(var\(--pp-surface-blur\)\)/, 'translucent and blurred')
   assert.match(panel[1], /background-color:\s*var\(--pp-surface-header-veil\)/, 'veiled from the palette')

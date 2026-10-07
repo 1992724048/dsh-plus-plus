@@ -13,11 +13,11 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'surface.title': '界面底色',
-        'surface.subtitle': '主题背景图铺满整个窗口；侧边栏与顶部标题栏单层半透明并模糊；会话功能栏半透明模糊、悬浮于内容之上，消息可滚入其下；内容区铺白色文章卡片，底部输入框除外；右侧会话面板改为浮动模糊窗口，不再挤压聊天宽度。',
+        'surface.subtitle': '主题背景图铺满整个窗口；侧边栏与顶部标题栏单层半透明并模糊；会话功能栏半透明悬浮于内容之上，消息可滚入其下；内容区铺白色文章卡片，底部输入框除外；右侧会话面板改为浮动模糊窗口，高度与会话内容区一致，不再挤压聊天宽度。',
       },
       en: {
         'surface.title': 'Surfaces',
-        'surface.subtitle': 'A themed backdrop fills the window; the sidebar and title bar wash it once with blur; the conversation bar veils, blurs and floats above the thread, which scrolls beneath it; the thread keeps its white article card; the right panel floats as a blurred window instead of squeezing the chat.',
+        'surface.subtitle': 'A themed backdrop fills the window; the sidebar and title bar wash it once with blur; the conversation bar veils and floats above the thread, which scrolls beneath it; the thread keeps its white article card; the right panel floats as a blurred window at the content area height instead of squeezing the chat.',
       },
     }
 
@@ -85,8 +85,6 @@ html [data-slot="conversation.header"] > * {
   right: 0;
   z-index: 5;
   background-color: var(--pp-surface-header-veil);
-  -webkit-backdrop-filter: blur(var(--pp-surface-blur));
-  backdrop-filter: blur(var(--pp-surface-blur));
 }
 
 html [data-conversation-scroll] {
@@ -99,7 +97,7 @@ html[data-windows-titlebar] [class*="_frame"]:not([data-rightbar-collapsed]) {
 
 html [class*="_frame"] > [class*="_rightbarCol"] {
   position: absolute;
-  top: 0;
+  top: var(--dsh-frame-top-clearance, 0px);
   right: 0;
   bottom: 0;
   z-index: 6;
