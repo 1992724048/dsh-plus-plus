@@ -1,25 +1,3 @@
-/**
- * Plus Plus — composer feature chunk.
- *
- * Restyles the message composer: the editor and the tool row are separate blocks
- * with a gutter, every control is its own block, and the whole palette follows the
- * host's light/dark scheme.
- *
- * Pure CSS. The host's composer is `conversation.composer.bar`, a `single` slot whose
- * `replaceRisk` is `shadows-shipped-ui` — registering there would replace the editor
- * outright and take its paste, `@`-mention, slash-command, attachment,
- * IME-composition and voice-input behaviour with it. Everything the mock-up asks for
- * is reachable by restyling, so nothing here registers a slot.
- *
- * ## Why this keys off `data-*`, not class names
- *
- * The host's class names are build-scoped hashes (`.RlGAzG_row`, `.wq12jW_trigger`),
- * so they change on every release and a selector written against them silently stops
- * matching. It does expose stable attributes — `data-composer-card`,
- * `data-input-scroll`, `data-composer-input` — and those are what this stylesheet
- * anchors on. The three hash classes used are each paired with a structural check,
- * so a rename cannot widen the blast radius.
- */
 window.__ModuleLoader__.load({
   id: 'dsh-plus-plus/client.composer.js',
   factory: require => {
@@ -29,9 +7,56 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const { createElement: h } = React
 
-    /** The core chunk. See client.font.js for why this is `require.async`. */
     let corePromise
     const core = () => (corePromise ??= require.async('./client.core.js'))
+    let declarationsPromise
+    const declarations = () => (declarationsPromise ??= require.async('./client.composer.css.js'))
+
+    const PERMISSION_SLOT = '[data-slot="conversation.input.permission"]'
+
+    const PERMISSION_MODES = [
+      { mode: 'readonly', match: '仅可查看' },
+      { mode: 'readonly', match: '仅可' },
+      { mode: 'readonly', match: '只读' },
+      { mode: 'readonly', match: '查看' },
+      { mode: 'readonly', match: 'Read-only' },
+      { mode: 'readonly', match: 'Read only' },
+      { mode: 'workspace', match: '工作区' },
+      { mode: 'workspace', match: 'Workspace' },
+      { mode: 'full', match: '完全权限' },
+      { mode: 'full', match: '完全' },
+      { mode: 'full', match: 'Full access' },
+      { mode: 'full', match: 'Full' },
+    ]
+
+    const MODE_ATTR = 'data-pp-mode'
+
+    function permissionText(button) {
+      const label = button.getAttribute('aria-label') ?? ''
+      const span = button.querySelector('[class*="triggerLabel"]')
+      return label + ' ' + (span?.textContent ?? '')
+    }
+
+    function permissionMode(text) {
+      for (const entry of PERMISSION_MODES) {
+        if (text.includes(entry.match)) return entry.mode
+      }
+      return undefined
+    }
+
+    function watchPermission(button) {
+      const paint = () => {
+        const mode = permissionMode(permissionText(button))
+        if (mode === undefined) button.removeAttribute(MODE_ATTR)
+        else if (button.getAttribute(MODE_ATTR) !== mode) button.setAttribute(MODE_ATTR, mode)
+      }
+
+      paint()
+
+      const observer = new MutationObserver(paint)
+      observer.observe(button, { childList: true, subtree: true, characterData: true })
+      return () => observer.disconnect()
+    }
 
     const DICT = {
       zh: {
@@ -44,396 +69,6 @@ window.__ModuleLoader__.load({
       },
     }
 
-    /**
-     * The composer palette, one entry per scheme.
-     *
-     * Declared through `ctx.theme.overrideTokens` rather than as CSS custom
-     * properties in a `:root` block, because that is the host's own light/dark
-     * mechanism: a `{ light, dark }` token map is recomposed whenever the scheme
-     * changes, so the composer follows the theme without this chunk knowing how the
-     * shell scopes its themes or which attribute carries the scheme.
-     *
-     * The colours, one scheme per line:
-     *
-     *  - dark  — the editor is 50% white over a blur, and **everything on it is
-     *    white**: the buttons, their labels, their icons.
-     *  - light — the editor is 50% black over a blur, and **everything on it is
-     *    black**.
-     *
-     * The whole composer inverts with the theme, and the editor stays translucent
-     * in both. An earlier version had the editor opaque black in dark while the
-     * controls stayed translucent, and the labelled triggers were a literal white
-     * in both schemes — which read as "pure white" in light and glared against a
-     * black editor in dark. Three times now a literal was the reason a scheme did
-     * not follow; the colours live in the palette for exactly this reason.
-     *
-     * The blur is a variable rather than a literal, so one declaration covers both
-     * schemes and a future "no blur" is a value change rather than a rule.
-     */
-    const PALETTE = {
-      // The editor: translucent in both schemes, so the conversation reads faintly
-      // through it. The blur rides along in both.
-      '--pp-composer-surface': { light: 'rgb(0 0 0 / 50%)', dark: 'rgb(255 255 255 / 50%)' },
-      '--pp-composer-blur': { light: '16px', dark: '16px' },
-
-      // Everything sitting on the editor takes the scheme's own value, so the
-      // composer reads as one piece: white on white in dark, black on black in
-      // light. The labels and icons use the ink pair.
-      '--pp-composer-trigger': { light: '#000', dark: '#fff' },
-      '--pp-composer-trigger-ink': { light: '#fff', dark: '#000' },
-      '--pp-composer-trigger-hover': { light: 'rgb(0 0 0 / 14%)', dark: 'rgb(255 255 255 / 14%)' },
-
-      // The attach and send buttons are the same story: solid in the scheme's own
-      // value, with the ink flipped so the glyph stays legible.
-      '--pp-composer-accent': { light: '#000', dark: '#fff' },
-      '--pp-composer-accent-ink': { light: '#fff', dark: '#000' },
-
-      // The hover the user asked for: the attach and send buttons go yellow. One
-      // value for both schemes, since it was specified as a single colour.
-      '--pp-composer-accent-hover': { light: '#ffee22', dark: '#ffee22' },
-      '--pp-composer-accent-hover-ink': { light: '#000', dark: '#000' },
-
-      // How long the accent pair takes to cross-fade on hover.
-      '--pp-composer-accent-transition': { light: '200ms', dark: '200ms' },
-
-      // A hairline that separates a control from the editor behind it. Same value in
-      // both schemes: the scheme's own colour at low alpha, so it is never a new hue.
-      '--pp-composer-stroke': { light: 'rgb(0 0 0 / 16%)', dark: 'rgb(255 255 255 / 22%)' },
-
-      // The generic control fill, for anything not covered above.
-      '--pp-composer-control': { light: 'rgb(0 0 0 / 12%)', dark: 'rgb(255 255 255 / 12%)' },
-      '--pp-composer-hover': { light: 'rgb(0 0 0 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
-    }
-
-    /**
-     * The composer's seat in the scroller.
-     *
-     * Found from a console dump of the live DOM: the host pins the composer to the
-     * bottom of the scroll area with `position: sticky; bottom: 0; z-index: 7` and
-     * lays a 36px gradient over the top of it, fading from transparent into the
-     * **opaque** conversation background:
-     *
-     *     linear-gradient(180deg,
-     *       color-mix(in srgb, var(--dsw-alias-bg-base) 0%, transparent) 0px,
-     *       var(--dsw-alias-bg-base) 36px)
-     *
-     * That opaque wash is what made message text look "covered": the last 36px of
-     * every message was swallowed by solid chat colour as it scrolled past.
-     *
-     * The fade itself is kept — it is what stops text colliding with the composer's
-     * top edge — but it now runs to transparent instead of to the chat background, so
-     * text scrolls *through* it and stays legible right up to the composer.
-     *
-     * The seat is matched on its readable class suffix rather than the build hash,
-     * the same way the row and dock are matched above. It is the one place this
-     * stylesheet depends on a host class name, because the host gives the seat no
-     * `data-` attribute of its own.
-     *
-     * `!important` is required: the host's own rule is a compound class selector, and
-     * nothing at class level outranks it without one.
-     */
-    const SEAT_CSS = `
-[class*="composerSeat"] {
-  background: linear-gradient(180deg, rgb(0 0 0 / 0%) 0px, rgb(0 0 0 / 0%) var(--pp-composer-seat-fade, 36px)) !important;
-}
-`.trim()
-
-    /**
-     * The composer restyle.
-     *
-     * The card stops being a surface — its own opaque background is dropped — so the
-     * blocks are what actually paints, and the card becomes the gutter between them.
-     */
-    const CSS = `
-[data-composer-card] {
-  --pp-composer-block-gap: 4px;
-  --pp-composer-inset: 10px;
-  /* One height for every control. The host ships 28px on the attach button, the
-     send button and both dropdown triggers alike; an earlier version set the
-     triggers to 26px through min-height, which is what made them sit visibly
-     shorter than the buttons beside them. */
-  --pp-composer-control-size: 28px;
-
-  background: transparent;
-  box-shadow: none;
-  border: 0;
-  gap: var(--pp-composer-block-gap);
-  padding: var(--pp-composer-block-gap) 0;
-}
-
-/* ── the editor block ───────────────────────────────────────────────────────── */
-
-[data-composer-card] > [data-input-scroll] {
-  box-sizing: border-box;
-  border: 1px solid var(--pp-composer-stroke);
-  background: var(--pp-composer-surface);
-  -webkit-backdrop-filter: blur(var(--pp-composer-blur));
-  backdrop-filter: blur(var(--pp-composer-blur));
-  margin-inline: var(--pp-composer-inset);
-  border-radius: 0;
-}
-
-/* The host sizes the editor's padding for a borderless card; the block now carries
-   its own border, so the text is inset to clear it. */
-[data-composer-input] {
-  padding: 10px 12px;
-  min-height: 44px;
-}
-
-[data-composer-placeholder] {
-  inset: 10px 12px auto;
-}
-
-[data-composer-card] > [data-input-scroll]::-webkit-scrollbar-track {
-  margin-top: 10px;
-}
-
-/* ── the tool row ───────────────────────────────────────────────────────────── */
-
-/* Not a surface: the row is only a positioning context holding the blocks apart.
-   Its own gap is left alone — the tighter spacing the user asked for is applied to
-   the two inner groups below, which is where those pairs actually sit. */
-[data-composer-card] > [data-input-scroll] ~ [class*="_row"] {
-  background: transparent;
-  border: 0;
-  margin-inline: var(--pp-composer-inset);
-  border-radius: 0;
-  padding: 0;
-}
-
-/* The host ships 12px inside these groups, dropping to 8px under a 560px
-   container query. Both pairs the user named sit inside one of them — attach and
-   permission in the leading group, model and send in the trailing one — so the gap
-   is set here. 4px makes the blocks read as neighbours rather than a toolbar. */
-[data-composer-card] :is([class*="_tools"], [class*="_modes"], [class*="_standardControls"]) {
-  gap: 4px;
-}
-
-/* ── controls ───────────────────────────────────────────────────────────────── */
-
-/* Every control is its own block: a bordered, filled surface with no shadow.
-
-   The cleared transform removes the host's nudge on the send button — a translateY
-   tuned for a layout that button no longer sits in.
-
-   The explicit alignment is stated rather than inherited. The controls shifted
-   downwards whenever the message list was not scrolled to the bottom, and the
-   cause is vertical placement rather than any transform of their own: the host
-   centres the row's groups, and the composer's own padding changes with scroll
-   state, so an inherited alignment leaves the smaller square buttons sitting low
-   against the taller row. Pinning it here makes every control independent of what
-   the row does. */
-[data-composer-card] :is(button, [role="button"]) {
-  border: 1px solid var(--pp-composer-stroke);
-  border-radius: 0;
-  box-shadow: none;
-  background: var(--pp-composer-control);
-  transform: none;
-  align-self: center;
-  vertical-align: middle;
-  -webkit-backdrop-filter: blur(var(--pp-composer-blur));
-  backdrop-filter: blur(var(--pp-composer-blur));
-}
-
-[data-composer-card] :is(button, [role="button"]):hover:not(:disabled) {
-  background: var(--pp-composer-hover);
-}
-
-/* The two labelled triggers.
- *
- * Anchored on structure, not on aria-haspopup. An earlier version used that
- * attribute and it was wrong: the model trigger carries menu, but the permission
- * trigger carries **no** aria-haspopup at all — it opens by other means — so the
- * rule matched only one of the two, and the other kept the host's own padding,
- * its 220px cap and its transparent fill.
- *
- * Position within the row is stable and observable, so it is used instead:
- * permission is a button in the modes group, model is the one inside the model
- * slot. Both take their fill and their ink from the palette, so they invert with
- * the theme — a literal white read as "pure white" in light but glared against a
- * black editor in dark.
- *
- * The content-based width is what makes the box follow the text. The host sizes
- * these buttons from their own caps — min(360px, 45cqw) on the model one, a fixed
- * 220px on the permission one — and the model's cap is in container-query units, so
- * it shrinks with the composer and can end up narrower than the label it contains.
- * A max-width cannot fix that: the box is still laid out from the cap and the text
- * spills past its edge. Sizing to the content instead puts the border around the
- * text, and max-width then becomes a ceiling that only bites on a very long name.
- *
- * The clip stays as the backstop: max-content can still exceed the cap,
- * and the host's labels ellipsize, so clipping bounds the edge rather than hiding
- * anything. */
-[data-composer-card] [class*="_modes"] button,
-[data-composer-card] [data-slot="conversation.input.model"] button {
-  height: var(--pp-composer-control-size);
-  padding: 0 12px;
-  width: max-content;
-  max-width: 340px;
-  background: var(--pp-composer-trigger);
-  color: var(--pp-composer-trigger-ink);
-  border-color: var(--pp-composer-stroke);
-  overflow: hidden;
-}
-
-/* The model trigger may still shrink when the row has no room.
- *
- * A zero min-width is what allows that: the host's own labels carry min-width:0, and
- * without it on the button the flex item cannot compress below its content, so a
- * tight row overflows instead of wrapping. It is the shrink *permission*, not a
- * width — the content-based width above still decides how wide it wants to be, and
- * The flex shrink factor decides whether it has to give ground.
- *
- * An earlier version paired this with a non-shrinking flex value, which cancelled the permission
- * out and produced the opposite symptom: a box narrower than its own text. */
-[data-composer-card] [data-slot="conversation.input.model"] button {
-  min-width: 0;
-}
-
-/* The model's own text, forced visible.
- *
- * The host hides it in compact mode. A ResizeObserver on the control groups sets a
- * text-display variable that the label and effort spans read, and it also gives
- * those spans a flex-shrink of 1000 — a thousand times the rate of anything else,
- * so they reach zero width first while the icon and chevron keep their size. What
- * renders is a bare square with no text at all.
- *
- * Three attempts to reach that through the variable did not work, and this one
- * stops trying. Declaring it on the button does nothing, because the row is where
- * the host sets it. Declaring it on the row does nothing either, which says the
- * host writes it as an inline style — and an inline style outranks every selector
- * at every level, so no declaration in this sheet can beat it.
- *
- * So the spans are pinned directly. !important does outrank a non-important inline
- * style, and the host's own rule carries none, as its bundled source shows. The
- * icon is pinned hidden to match, so the compact look cannot half-apply.
- *
- * Overflow is already clipped by the shared trigger rule above, so forcing the
- * text visible cannot push it outside the box — that was the overflow bug, and it
- * was fixed at the clip, not by hiding the text. */
-[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerLabel"],
-[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"] {
-  display: inline !important;
-  flex: 0 0 auto !important;
-}
-
-[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerIcon"] {
-  display: none !important;
-}
-
-/* The labelled triggers keep a quiet hover. They are not the primary action, so
-   the accent pair's yellow is deliberately not shared with them. */
-[data-composer-card] [class*="_modes"] button:hover:not(:disabled),
-[data-composer-card] [data-slot="conversation.input.model"] button:hover:not(:disabled) {
-  background: var(--pp-composer-trigger-hover);
-}
-
-/* Square controls: attach and send.
-
-   The attach button is the "+" carrying aria-haspopup of listbox — it is the only
-   one — and it is also the first button in the row's leading group. Either anchor
-   finds it; the group one is kept as a backstop in case the attribute changes. */
-[data-composer-card] button[aria-haspopup="listbox"],
-[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
-  width: var(--pp-composer-control-size);
-  height: var(--pp-composer-control-size);
-  padding: 0;
-}
-
-/* ── the two accent controls ────────────────────────────────────────────────── */
-
-/* Selected by structure, not by name. The obvious anchor is the submit button's
-   aria-label, but that string is localised: on an English UI a selector matching
-   it finds nothing and the button quietly loses its accent.
-
-   The submit button is the last button in the trailing group. An earlier attempt
-   anchored on the activity slot that precedes it, but the host hides an empty
-   activity slot with display:none, so the sibling combinator stopped matching
-   exactly when the composer was empty — which is when the button was reported as
-   oversized. last-of-type is unaffected by whether that slot is rendered.
-
-   NOTE: no backticks in this comment — it lives inside a template literal, and a
-   backtick here closes the literal early and turns the rest of the CSS into
-   JavaScript. A test walks every CSS literal's boundary to catch exactly this. */
-
-/* Attach: the "+" that opens the file/command list — the only button carrying
-   aria-haspopup of listbox, and the first button in the row's leading group.
-   Both anchors are listed so a change to either still leaves the accent applied.
-
-   The ink is the accent's own pair rather than the editor surface: the surface is
-   translucent now, and a glyph painted in it would render at half alpha.
-
-   The transition is declared on the resting state, not on the hover. A rule that
-   appears only while hovered animates *into* that state but snaps out of it, so
-   the fade would be one-way. */
-[data-composer-card] button[aria-haspopup="listbox"],
-[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
-  background: var(--pp-composer-accent);
-  color: var(--pp-composer-accent-ink);
-  transition: background-color var(--pp-composer-accent-transition) ease,
-              color var(--pp-composer-accent-transition) ease;
-}
-
-[data-composer-card] button[aria-haspopup="listbox"]:hover:not(:disabled),
-[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type:hover:not(:disabled) {
-  background: var(--pp-composer-accent-hover);
-  color: var(--pp-composer-accent-hover-ink);
-}
-
-/* Send: the last button of the trailing group, whatever the activity slot is doing.
-   Square, like attach, and the same 28px as every other control. */
-[data-composer-card] [class*="_trailing"] button:last-of-type {
-  background: var(--pp-composer-accent);
-  color: var(--pp-composer-accent-ink);
-  width: var(--pp-composer-control-size);
-  height: var(--pp-composer-control-size);
-  padding: 0;
-  transition: background-color var(--pp-composer-accent-transition) ease,
-              color var(--pp-composer-accent-transition) ease;
-}
-
-[data-composer-card] [class*="_trailing"] button:last-of-type:hover:not(:disabled) {
-  background: var(--pp-composer-accent-hover);
-  color: var(--pp-composer-accent-hover-ink);
-}
-
-[data-composer-card] [class*="_trailing"] button:last-of-type:disabled {
-  opacity: .4;
-}
-
-/* ── attachments ────────────────────────────────────────────────────────────── */
-
-/* The attachment rail and the overlay are siblings of the editor, above it; they
-   move into the editor's block so a queued file reads as part of the draft. */
-[data-composer-card] > [data-slot="conversation.input.attachments"],
-[data-composer-card] > [data-slot="conversation.input.overlay"] {
-  margin-inline: var(--pp-composer-inset);
-}
-
-/* ── the dock below ─────────────────────────────────────────────────────────── */
-
-/* Ambient entries get their own blocks on their own background. The dock is a
-   sibling of the card, not a child, so the card's palette does not reach it — every
-   value is restated rather than inherited. */
-[data-composer-card] ~ [class*="_dock"] {
-  background: transparent;
-  border: 0;
-  margin-top: var(--pp-composer-block-gap);
-}
-
-[data-composer-card] ~ [class*="_dock"] :is(button, [role="button"]) {
-  border: 1px solid var(--pp-composer-stroke);
-  border-radius: 0;
-  box-shadow: none;
-  background: var(--pp-composer-control);
-  transform: none;
-}
-
-[data-composer-card] ~ [class*="_dock"] :is(button, [role="button"]):hover:not(:disabled) {
-  background: var(--pp-composer-hover);
-}
-`.trim()
-
     function Settings({ t }) {
       return h('div', { className: 'pp-section' }, [
         h('h2', { className: 'pp-title' }, t('composer.title')),
@@ -445,25 +80,37 @@ window.__ModuleLoader__.load({
     exports.descriptor = {
       id: 'composer',
       group: 'ui',
-      // After `shape`: the host gives the send button a border-radius of 999px and
-      // marks it `corner-shape: round`, and the corner sweep must have the last word.
       order: 30,
       locale: DICT,
-      css: CSS,
-      // Concatenated into the one stylesheet rather than registered separately: the
-      // seat rule needs the card's fade variable to resolve, and two style tags
-      // would make that depend on insertion order for no benefit.
-      seatCss: SEAT_CSS,
-      palette: PALETTE,
       title: 'composer.title',
       settings: Settings,
       async apply(ctx) {
-        const { registerStyles, applyPalette } = await core()
+        const [{ registerStyles, applyPalette }, declaration] = await Promise.all([core(), declarations()])
 
-        // The palette first, so the stylesheet's var() references resolve against
-        // real values on the frame they are first used.
-        applyPalette(ctx, PALETTE, 'composer')
-        registerStyles(ctx, `${CSS}\n${SEAT_CSS}`, 'composer')
+        applyPalette(ctx, declaration.PALETTE, 'composer')
+        registerStyles(ctx, `${declaration.CSS}\n${declaration.SEAT_CSS}`, 'composer')
+
+        ctx.effect(() => {
+          let stopWatching
+          let ticks = 0
+
+          const poll = setInterval(() => {
+            const slot = document.querySelector(PERMISSION_SLOT)
+            const button = slot?.querySelector('button')
+            if (button === undefined || button === null) {
+              if (++ticks > 40) clearInterval(poll)
+              return
+            }
+
+            clearInterval(poll)
+            stopWatching = watchPermission(button)
+          }, 250)
+
+          return () => {
+            clearInterval(poll)
+            if (typeof stopWatching === 'function') stopWatching()
+          }
+        }, 'dsh-plus-plus: permission mode')
       },
     }
     return module.exports

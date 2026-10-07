@@ -11,7 +11,7 @@ import path from 'node:path'
 
 import {
   CLIENT_CHUNK, PACKAGE, ROOT, SEED_WORDS,
-  allChunkFiles, boot, bootRun, expectedChunkOrder, featureChunkFiles, readCode, test,
+  allChunkFiles, boot, bootRun, expectedChunkOrder, featureChunkFiles, readCode, requiredChunkFiles, test,
 } from './harness.mjs'
 
 test('the entry bundle parses, registers and exports the loader face', () => {
@@ -71,7 +71,7 @@ test('the entry requires exactly the chunks that exist on disk', async () => {
   assert.equal(declared[0], './client.core.js', 'the core chunk must load first')
   assert.deepEqual(
     declared.slice(1).map(name => name.slice('./'.length)).sort(),
-    featureChunkFiles(),
+    requiredChunkFiles(),
     'CHUNKS must list every feature chunk exactly once, after the core',
   )
 })
@@ -98,8 +98,15 @@ test('chunks are reached through require.async, never the synchronous require', 
   for (const { spec } of sync) {
     assert.ok(SEED_WORDS.has(spec), `sync require of "${spec}" would miss the module table`)
   }
-  assert.deepEqual([...new Set(sync.map(call => call.spec))], ['react'],
-    'the only synchronous require must be the react seed word')
+  // Every sync require must be a platform seed word, and the set is small enough to
+  // name: react for every chunk, plus the UI primitives a feature needs in order to
+  // render. Both are answered by the shell's seeded module table — the host's own
+  // client bundles require them exactly this way — so neither misses it.
+  // A package the plugin itself ships must never appear here: that is the mistake
+  // this test exists to catch, and the SEED_WORDS check above is what enforces it.
+  assert.deepEqual([...new Set(sync.map(call => call.spec))].sort(),
+    ['@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-primitives', 'react'],
+    'only the seeded platform modules may be required synchronously')
 
   // The entry fetches each chunk in declaration order. The feature chunks then ask
   // for core again, already materialized — so those repeats must be cache hits.
@@ -113,12 +120,21 @@ test('chunks are reached through require.async, never the synchronous require', 
 test('no chunk uses the synchronous require to reach the core', () => {
   // The feature chunks were the second place this went wrong: each reached for the
   // core synchronously at factory time, which is the same miss.
+  // The core is a feature-chunk responsibility; declaration-only chunks are owned
+  // by their feature and export data rather than booting the registry.
   for (const file of featureChunkFiles()) {
     const source = readCode(file)
     assert.doesNotMatch(source, /require\(\s*['"`]dsh-plus-plus\//,
       `${file} must not require a chunk synchronously — use require.async on the core chunk`)
     assert.match(source, /require\.async\(\s*['"]\.\/client\.core\.js['"]\s*\)/,
       `${file} must reach core through require.async`)
+  }
+  for (const file of allChunkFiles().filter(name => name.endsWith('.css.js'))) {
+    const source = readCode(file)
+    assert.doesNotMatch(source, /require\(\s*['"`]dsh-plus-plus\//,
+      `${file} must not require a chunk synchronously`)
+    assert.doesNotMatch(source, /require\.async\(\s*['"]\.\/client\.core\.js['"]\s*\)/,
+      `${file} is a declaration chunk and must not boot the feature registry`)
   }
 })
 

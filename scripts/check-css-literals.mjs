@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 /** Bundle files that can hold a stylesheet. */
-const CANDIDATES = /^client(\.[a-z0-9-]+)*\.js$/
+const CANDIDATES = /^client(?:\.[a-z0-9-]+)*\.js$/
 
 /** Openers: a CSS-looking name bound to a template literal. */
 const OPENER = /\b(CSS|STYLES|SHEET)\w*\s*=\s*`/gi
@@ -150,7 +150,7 @@ function looksLikeMoreCss(text) {
   return rule.test(window)
 }
 
-/** The candidate files on disk. */
+/** The candidate files on disk: every loader chunk, including dotted suffixes. */
 export function candidateFiles() {
   return fs.readdirSync(ROOT)
     .filter(name => CANDIDATES.test(name))

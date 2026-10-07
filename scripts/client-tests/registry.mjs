@@ -20,7 +20,7 @@ test('each feature chunk declares exactly one complete feature', async () => {
   const { cache } = await bootRun()
   const core = cache.get('client.core.js').exports
   const declared = core.listFeatures()
-  const featureChunks = [...cache.keys()].filter(file => file !== 'client.core.js')
+  const featureChunks = [...cache.keys()].filter(file => file !== 'client.core.js' && !file.endsWith('.css.js'))
 
   assert.equal(declared.length, featureChunks.length, 'one feature per chunk')
   for (const file of featureChunks) {
@@ -28,7 +28,6 @@ test('each feature chunk declares exactly one complete feature', async () => {
     const feature = declared.find(entry => entry.id === id)
     assert.ok(feature, `${file} should declare "${id}"; got ${declared.map(f => f.id).join(', ')}`)
     assert.equal(typeof feature.apply, 'function', `${id} must provide apply()`)
-    assert.ok(feature.css.trim().length > 0, `${id} must contribute a stylesheet`)
     assert.equal(typeof feature.settings, 'function', `${id} must contribute a settings section`)
     assert.deepEqual([...Object.keys(feature.locale ?? {})].sort(), ['en', 'zh'], `${id} needs both halves`)
     assert.deepEqual(

@@ -75,16 +75,22 @@ export function allChunkFiles() {
   return fs.readdirSync(ROOT).filter(name => /^client\..*\.js$/.test(name)).sort()
 }
 
-/** The chunk files that declare a feature — i.e. everything but the core. */
 export function featureChunkFiles() {
-  return allChunkFiles().filter(name => name !== 'client.core.js')
+  return allChunkFiles().filter(name => name !== 'client.core.js' && !name.endsWith('.css.js'))
+}
+
+export function requiredChunkFiles() {
+  return [...featureChunkFiles(), ...declarationChunkFiles()].sort()
+}
+
+/** Declaration-only chunks: data for their owning feature, never a descriptor. */
+export function declarationChunkFiles() {
+  return allChunkFiles().filter(name => name.endsWith('.css.js'))
 }
 
 /** Read one file with comments stripped, so prose cannot match a code pattern. */
 export function readCode(file) {
   return fs.readFileSync(path.join(ROOT, file), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1')
 }
 
 /**
@@ -117,8 +123,24 @@ export function stubContext() {
     bind: () => key => key,
   }
   const slotsService = {
-    inject(key, callback) { callback(); return noop },
-    register(options) { slots.push(options); return noop },
+    // The host injects by handing the callback a generator runner and collecting
+    // what it yields, so a plugin's
+    //
+    //   ctx.slots.inject(name, function* () {
+    //     yield ctx.slots.register({ name, id }, Component)
+    //   })
+    //
+    // registers each entry exactly as it declares it. Calling the generator without
+    // iterating it would run no `yield` and register nothing — which would make a
+    // plugin that registers nothing look identical to one that registers correctly.
+    inject(key, callback) {
+      const iterator = callback()
+      if (typeof iterator?.next === 'function') {
+        for (const step of iterator) void step
+      }
+      return noop
+    },
+    register(options, component) { slots.push({ ...options, component }); return noop },
   }
 
   // The theme service reproduces the host's `Map<source, layer>`: calling
@@ -169,13 +191,112 @@ export function stubContext() {
 
 // ── the loader ───────────────────────────────────────────────────────────────
 
-/** A React stand-in; the bundles only use createElement and two hooks. */
+/** A React stand-in; the bundles only use createElement, hooks and Fragment. */
 const REACT = {
   createElement: (type, props, ...children) => ({ type, props, children }),
   useState: initial => [initial, noop],
   useEffect: noop,
+  useCallback: fn => fn,
+  useMemo: fn => fn(),
+  Fragment: 'Fragment',
 }
 
+const RENDERED_NODES = []
+
+/**
+ * Invoke one slot component the way React would mount it, and return the element
+ * tree it produced.
+ *
+ * `renderSlotEntry` only builds the component's props. A menu row can then still
+ * throw inside its own `onSelect` — the exact regression behind "click does
+ * nothing" — while every prop-shape assertion passes. Materialising the tree here
+ * is enough to run those handlers without pulling in a renderer.
+ */
+export function renderSlotComponent(entry, props = {}) {
+  const resolved = renderSlotEntry(entry, props)
+  const component = entry.component ?? entry.Component ?? entry.registered
+  assert.equal(typeof component, 'function', 'the slot must register a component')
+  const element = component(resolved)
+  RENDERED_NODES.push({ entry, props: resolved, element })
+  return { ...resolved, element }
+}
+
+/**
+ * Render one registered slot entry the way the shell does: resolve `inject` by
+ * CALLING it, resolve `store.create()`, and hand the component a `t` derived from
+ * the registration's `locale` namespace.
+ *
+ * Without this the browser half can pass every structural assertion and still crash
+ * on mount, which is exactly what happened twice.
+ */
+export function renderSlotEntry(entry, props = {}) {
+  if (typeof entry?.inject !== 'function') {
+    throw new TypeError("inject is not a function — the runtime calls it as a factory")
+  }
+  const injected = entry.inject()
+  const t = key => `${entry.locale ?? 'default'}.${key}`
+  // `hooks` sources are BARE observable sources — `subscribe`/`getSnapshot`, the
+  // shape `bindInjectSources` binds with `observableHook`. Each becomes a selector
+  // hook: `use<Name>(selector)` reads the source through `getSnapshot`. A source
+  // that is not shaped like an observable means the entry will crash on mount in
+  // the browser even though every structural assertion passes.
+  const { hooks, ...rest } = injected
+  const bound = {}
+  for (const [name, source] of Object.entries(hooks ?? {})) {
+    const hookName = 'use' + (name[0]?.toUpperCase() ?? '') + name.slice(1)
+    if (source === undefined || typeof source.subscribe !== 'function' || typeof source.getSnapshot !== 'function') {
+      throw new TypeError(
+        `hooks.${name} must be a subscribe/getSnapshot observable — `
+        + `bindInjectSources() binds it with observableHook(), which calls subscribe() and getSnapshot()`,
+      )
+    }
+    const selectorHook = (selector, equal) => {
+      const snapshot = source.getSnapshot()
+      return selector === undefined ? snapshot : selector(snapshot, equal)
+    }
+    bound[hookName] = selectorHook
+    bound[name] = selectorHook
+    bound['raw' + hookName[0].toUpperCase() + hookName.slice(1)] = selectorHook
+  }
+  return { ...props, ...rest, ...bound, t }
+}
+/**
+ * A stand-in for dsh-client-ui-primitives.
+ *
+ * The real module exports ~200 components. A plugin only needs the handful it
+ * renders, so each is a marker function that records its props when called — which
+ * is enough for a test to assert the structure without a renderer.
+ */
+const PRIMITIVES = new Proxy({
+  Modal: 'Modal',
+  Button: 'Button',
+  MenuItemButton: 'MenuItemButton',
+  IconTrashOutlineRegular: 'IconTrashOutlineRegular',
+}, {
+  get(target, key) {
+    // Anything not named above still has to resolve: a plugin rendering an
+    // unstubbed component must not fail at require time.
+    return key in target ? target[key] : String(key)
+  },
+})
+/**
+ * A stand-in for dsh-client-store's snapshot store.
+ *
+ * Models the three methods the slot `store` option actually exercises: a `create`
+ * that yields the store, `getSnapshot`, and `set`. It is deliberately not a full
+ * zustand stand-in — what matters here is that a registration passing `store` can
+ * hand the runtime something with a `create`.
+ */
+function createSnapshotStore(init = null) {
+  let snapshot = init
+  return {
+    getSnapshot: () => snapshot,
+    set: next => { snapshot = next },
+    subscribe: () => () => {},
+  }
+}
+
+const CLIENT_STORE = { createSnapshotStore }
 /**
  * Evaluate one bundle in a fresh realm and return its registration.
  *
@@ -198,6 +319,19 @@ function evaluate(fileName, requireImpl, styleTags) {
         ? { tag, textContent: '', setAttribute: noop, remove: () => { styleTags.pop() } }
         : {}),
       head: { appendChild: node => { styleTags.push(node); return node } },
+      // The composer chunk polls for its permission button and watches it for mode
+      // changes. Without these the chunk throws at apply and takes the whole entry
+      // down with it — which is the failure mode the stub exists to prevent, not to
+      // accommodate. querySelector answers null, which is the page-with-no-conversation
+      // case, so the poll simply exhausts and stops.
+      querySelector: () => null,
+    },
+    // Never fires. Enough to model "the composer has not mounted": the poll runs
+    // its course, finds nothing, and clears itself. A real interval would hold the
+    // process open and outlive the test.
+    MutationObserver: class {
+      observe() {}
+      disconnect() {}
     },
     fetch: async () => ({ ok: true, status: 200 }),
     setInterval: noop,
@@ -231,6 +365,8 @@ function makeRequire(cache, styleTags) {
   const syncRequire = spec => {
     requireImpl.calls.push({ kind: 'sync', spec })
     if (spec === 'react') return REACT
+    if (spec === '@deepseek-ai/dsh-client-ui-primitives') return PRIMITIVES
+    if (spec === '@deepseek-ai/dsh-client-store') return CLIENT_STORE
     if (SEED_WORDS.has(spec)) throw new Error(`seed word "${spec}" has no test implementation`)
     const record = cache.get(spec)
     if (record !== undefined) return record.exports

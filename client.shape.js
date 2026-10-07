@@ -1,9 +1,3 @@
-/**
- * Plus Plus — sharp-corner feature chunk.
- *
- * Flattens every corner in the shell while keeping what the host explicitly marked
- * as round. Written in, no switch — see README for why.
- */
 window.__ModuleLoader__.load({
   id: 'dsh-plus-plus/client.shape.js',
   factory: require => {
@@ -13,15 +7,6 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const { createElement: h } = React
 
-    /**
-     * The core chunk, reached through `require.async`.
-     *
-     * The shell's plain `require` is a synchronous module-table lookup that answers
-     * only platform seed words and already-materialized rows; a sibling chunk is
-     * neither, and asking for one that way throws `missed the module table` and
-     * fails the whole entry at boot. `require.async` is the chunk path. Memoised,
-     * because a chunk must not be fetched twice.
-     */
     let corePromise
     const core = () => (corePromise ??= require.async('./client.core.js'))
 
@@ -42,30 +27,6 @@ window.__ModuleLoader__.load({
       },
     }
 
-    /**
-     * Two layers, because the host uses both styles.
-     *
-     * The radius scale: the host owns six `--dsw-radius-*` variables and most of
-     * its CSS reads them rather than hardcoding a length, so zeroing the six
-     * covers panels, cards, inputs, buttons, code blocks and modals. The five
-     * `--dsl-*-radius` tokens derive from that scale and are reset explicitly, so
-     * a stale theme value cannot leak through.
-     *
-     * The sweep: the host still hardcodes a length in ~163 rules, which no variable
-     * reaches — including the 27 `999px` pills used for chips and tags. It needs
-     * `!important` because the host's rules are class selectors `(0,1,0)` and a
-     * universal selector is only `(0,0,0)`.
-     *
-     * Keeping the circles: the sweep would also flatten the 37 `border-radius: 50%`
-     * rules for avatars, status dots, progress rings and the checkbox knob. The
-     * host marks those with `corner-shape: round` (33 of the 37 carry it alongside
-     * the `50%`), and that property is CSS Shapes' `corner-shape`. Declaring
-     * `corner-shape: square` against that marker re-squares exactly what was
-     * deliberately round, and nothing else.
-     *
-     * If a future runtime drops CSS Shapes, the degradation is "circles become
-     * square too" — still consistent, just fewer circles.
-     */
     const CSS = `
 :root {
   --dsw-radius-xs: 0px;
@@ -74,7 +35,6 @@ window.__ModuleLoader__.load({
   --dsw-radius-lg: 0px;
   --dsw-radius-xl: 0px;
   --dsw-radius-panel: 0px;
-
   --dsl-code-block-border-radius: 0px;
   --dsl-guide-entry-radius: 0px;
   --dsl-search-radius: 0px;
@@ -86,7 +46,6 @@ window.__ModuleLoader__.load({
 [style*="corner-shape"] { corner-shape: square !important; }
 `.trim()
 
-    /** A preview: a square card, a square pill, and the circle that survived. */
     function Settings({ t }) {
       return h('div', { className: 'pp-section' }, [
         h('h2', { className: 'pp-title' }, t('shape.title')),
@@ -100,19 +59,6 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    // ── declaration ────────────────────────────────────────────────────────────
-    /**
-     * The feature descriptor.
-     *
-     * Exported rather than registered here: `defineFeature` lives in the core chunk,
-     * which is reachable only through `require.async`, so it cannot be called during
-     * this synchronous factory. The entry awaits the chunk, then hands this
-     * descriptor to `core.defineFeature`.
-     *
-     * `order: 20` — booted after `font`. Both contribute stylesheets, and at equal
-     * specificity the later rule wins, so the corner sweep has the last word and no
-     * font rule can bring a rounded corner back.
-     */
     exports.id = 'dsh-plus-plus/client.shape.js'
     exports.descriptor = {
       id: 'shape',

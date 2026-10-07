@@ -1,14 +1,3 @@
-/**
- * Plus Plus — font feature chunk.
- *
- * JetBrains Mono first, HarmonyOS Sans as the Chinese fallback, both from npm
- * dependencies rather than the system, so a machine with neither installed still
- * renders identically.
- *
- * Owns everything font-specific: which stylesheets to load, the stacks, and the
- * host variables to re-point. Nothing here reaches outside the chunk except the
- * core helpers.
- */
 window.__ModuleLoader__.load({
   id: 'dsh-plus-plus/client.font.js',
   factory: require => {
@@ -18,22 +7,9 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const { createElement: h } = React
 
-    /**
-     * The core chunk, reached through `require.async`.
-     *
-     * The shell's plain `require` is a synchronous module-table lookup that answers
-     * only platform seed words and already-materialized rows; a sibling chunk is
-     * neither, and asking for one that way throws `missed the module table` and
-     * fails the whole entry at boot. `require.async` is the chunk path. By the time
-     * this factory runs the entry has already awaited `./client.core.js`, so the
-     * promise settles immediately from the table.
-     *
-     * The result is memoised because a chunk must not register twice.
-     */
     let corePromise
     const core = () => (corePromise ??= require.async('./client.core.js'))
 
-    // ── copy ───────────────────────────────────────────────────────────────────
     const DICT = {
       zh: {
         'font.title': '字体',
@@ -57,24 +33,8 @@ window.__ModuleLoader__.load({
       },
     }
 
-    /** Route prefix served by the host. Must match `FONT_ROUTE` in src/fonts.js. */
     const FONT_ROUTE = '/api/dsh-plus-plus/fonts'
 
-    // ── what to load ───────────────────────────────────────────────────────────
-    /**
-     * The stylesheets to load, per family.
-     *
-     * Each entry is a path relative to that family's served root, because the
-     * packages resolve their own `url()` relatively and the host serves each
-     * package from its own root: `@fontsource/jetbrains-mono` writes
-     * `./files/…`, while the HarmonyOS package writes `./Regular/…`.
-     *
-     * The subsets loaded are the ones that can carry glyphs this shell shows: the
-     * UI is zh/en, and conversations can carry Cyrillic or Greek. The HarmonyOS SC
-     * stylesheets are one per weight and cover the whole CJK range — their
-     * `unicode-range` already splits them into ~82 shards per weight, so a page
-     * only downloads the shards holding characters actually on screen.
-     */
     const SHEETS = [
       ...['latin', 'latin-ext', 'cyrillic', 'greek', 'vietnamese']
         .flatMap(subset => ['300', '400', '500', '600', '700'].map(weight => `${subset}-${weight}.css`))
@@ -83,42 +43,19 @@ window.__ModuleLoader__.load({
         .map(weight => ({ family: 'harmonyos-sans-sc', file: `${weight}.css` })),
     ]
 
-    /** One representative asset per family, for the readiness check. */
     const PROBES = [
       ['JetBrains Mono', `${FONT_ROUTE}/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2`],
       ['HarmonyOS Sans', `${FONT_ROUTE}/harmonyos-sans-sc/Regular.css`],
     ]
 
-    // ── the stylesheet ─────────────────────────────────────────────────────────
-    /**
-     * JetBrains Mono leads every monospace stack and HarmonyOS Sans follows it.
-     * The browser resolves the list per character, so Latin text uses JetBrains
-     * Mono and CJK falls through to HarmonyOS Sans within one declaration.
-     *
-     * The host already owns two font variables — `--dsw-font-family` for body and
-     * `--ds-font-family-code` for code — and the conversation surface is built
-     * entirely out of them, including the markdown heading ladder
-     * (`--dsw-font-markdown-h1…h4` all end in `var(--dsw-font-family)`).
-     *
-     * So we re-point those two variables rather than writing element rules. An
-     * `html, body` rule loses to any class selector that sets its own
-     * `font-family`, which is exactly why the first version covered the sidebar
-     * but not the conversation.
-     */
     const CSS = `
 @import ${SHEETS.map(entry => `url("${FONT_ROUTE}/${entry.family}/${entry.file}")`).join('\n@import ')};
 
 :root {
   --pp-font-mono: 'JetBrains Mono', 'HarmonyOS Sans', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --pp-font-sans: 'HarmonyOS Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-
-  /* Re-point the host's own variables at our stacks, keeping its size and weight
-     ladders intact. */
   --dsw-font-family: var(--pp-font-sans);
   --ds-font-family-code: var(--pp-font-mono);
-
-  /* A third variable the host reads in a few places (document preview, tool cards)
-     where it falls back to inheriting. */
   --dsw-font: var(--pp-font-sans);
 }
 code, pre, kbd, samp {
@@ -127,12 +64,6 @@ code, pre, kbd, samp {
 }
 `.trim()
 
-    /**
-     * Probe both families once.
-     *
-     * A 404 means the host is not serving that package, which is otherwise a
-     * failure the user would only notice as subtly wrong-looking glyphs.
-     */
     async function probe() {
       return Promise.all(PROBES.map(async ([name, url]) => {
         try {
@@ -144,13 +75,6 @@ code, pre, kbd, samp {
       })).then(results => results.filter(Boolean))
     }
 
-    // ── settings section ───────────────────────────────────────────────────────
-    /**
-     * A live preview of the stack.
-     *
-     * `t` comes from `client.js`, which owns the locale binding — a feature
-     * contributes one section and never registers a dictionary itself.
-     */
     function Settings({ t }) {
       const { useState, useEffect } = React
       const [missing, setMissing] = useState(undefined)
@@ -184,19 +108,6 @@ code, pre, kbd, samp {
       ])
     }
 
-    // ── declaration ────────────────────────────────────────────────────────────
-    /**
-     * The feature descriptor.
-     *
-     * It is *exported*, not registered here: `defineFeature` lives in the core
-     * chunk, and the core chunk is reachable only through `require.async`, so it
-     * cannot be called during this synchronous factory. The entry awaits the chunk,
-     * then hands this descriptor to `core.defineFeature`.
-     *
-     * `apply` is therefore async — it awaits the core chunk to reach
-     * `registerStyles`. By then the entry has already materialized it, so this
-     * settles without another fetch.
-     */
     exports.id = 'dsh-plus-plus/client.font.js'
     exports.descriptor = {
       id: 'font',
