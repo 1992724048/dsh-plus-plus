@@ -1015,8 +1015,8 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
   const { palette, css } = await featureOf('surface')
   assert.deepEqual(
     [...Object.keys(palette)].sort(),
-    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-article-card', '--pp-surface-chat-image'],
-    'the swap owns the two column tokens plus its own backdrop and card tokens, and nothing else',
+    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-article-card', '--pp-surface-chat-image', '--pp-surface-header-veil'],
+    'the swap owns the two column tokens plus its own backdrop, card and header tokens, and nothing else',
   )
   assert.deepEqual(
     Object.keys(palette).filter(token => token.startsWith('--dsw-')).sort(),
@@ -1035,10 +1035,27 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
     const sidebar = palette['--dsw-specific-sidebar-fill'][scheme]
     assert.notEqual(chat, sidebar, `${scheme}: the two columns must end up different`)
     assert.match(chat, /^rgb\(/, `${scheme}: chat must be a concrete colour, not a var() cycle`)
-    assert.match(sidebar, /^rgb\(/, `${scheme}: sidebar must be a concrete colour`)
-    assert.match(sidebar, /\/ \d+%\)$/,
-      `${scheme}: the sidebar fill must be a translucent wash — the title bar shares this token and both must read the backdrop through it`)
+    assert.match(sidebar, /url\("\/api\/dsh-plus-plus\/assets\//,
+      `${scheme}: the sidebar paints the window image itself — its opaque layer hides every consumer stacked below it`)
+    assert.match(sidebar, / fixed center \/ cover no-repeat, rgb\(/,
+      `${scheme}: pinned to the viewport so every consumer renders the identical crop`)
+    assert.match(sidebar, /\/ 50%\)/,
+      `${scheme}: one translucent tint above the image — stacking stays uniform instead of banding at the bottom`)
   }
+})
+
+test('the conversation header carries a translucent veil', async () => {
+  const { palette, css } = await featureOf('surface')
+
+  assert.equal(palette['--pp-surface-header-veil'].light, 'rgb(255 255 255 / 65%)',
+    'light: a white veil over the backdrop')
+  assert.equal(palette['--pp-surface-header-veil'].dark, 'rgb(20 20 22 / 65%)',
+    'dark: a dark veil over the backdrop')
+
+  const rule = /html \[data-slot="conversation\.header"\] > \*\s*\{([^}]*)\}/.exec(css)
+  assert.ok(rule, 'the header element must carry the veil')
+  assert.match(rule[1], /background-color:\s*var\(--pp-surface-header-veil\)/,
+    'the veil must come from the palette so the host can flip it with the scheme')
 })
 
 test('the backdrop fills the window and every image layer shares one crop', async () => {

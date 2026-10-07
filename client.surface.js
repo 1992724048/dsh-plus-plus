@@ -13,17 +13,20 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'surface.title': '界面底色',
-        'surface.subtitle': '主题背景图铺满整个窗口（浅色 bk、暗色 bg）；侧边栏与顶部标题栏半透明，透出底图；会话内容区像博客文章一样铺白色半透明卡片，底部输入框与按钮除外。',
+        'surface.subtitle': '主题背景图铺满整个窗口（浅色 bk、暗色 bg）；侧边栏与顶部标题栏在其上单层半透明、底部不再叠色；会话标题栏加半透明蒙层；内容区像博客文章一样铺白色卡片，底部输入框与按钮除外。',
       },
       en: {
         'surface.title': 'Surfaces',
-        'surface.subtitle': 'A themed backdrop fills the whole window (bk in light, bg in dark); the sidebar and the top title bar stay translucent above it; the thread sits on a white translucent article card, with the composer and its buttons left off it.',
+        'surface.subtitle': 'A themed backdrop fills the whole window (bk in light, bg in dark); the sidebar and title bar wash it once, without stacking into a band at the bottom; the conversation header gets a translucent veil; the thread sits on a white article card, composer excluded.',
       },
     }
 
     const PALETTE = {
       '--dsw-alias-bg-base': { light: 'rgb(249 250 251)', dark: 'rgb(28 28 30)' },
-      '--dsw-specific-sidebar-fill': { light: 'rgb(255 255 255 / 50%)', dark: 'rgb(20 20 22 / 50%)' },
+      '--dsw-specific-sidebar-fill': {
+        light: 'linear-gradient(rgb(255 255 255 / 50%), rgb(255 255 255 / 50%)), url("/api/dsh-plus-plus/assets/bk.jpg") fixed center / cover no-repeat, rgb(255 255 255)',
+        dark: 'linear-gradient(rgb(20 20 22 / 50%), rgb(20 20 22 / 50%)), url("/api/dsh-plus-plus/assets/bg.jpg") fixed center / cover no-repeat, rgb(20 20 22)',
+      },
       '--pp-surface-chat-image': {
         light: 'url("/api/dsh-plus-plus/assets/bk.jpg")',
         dark: 'url("/api/dsh-plus-plus/assets/bg.jpg")',
@@ -31,6 +34,10 @@ window.__ModuleLoader__.load({
       '--pp-surface-article-card': {
         light: 'rgb(255 255 255 / 85%)',
         dark: 'rgb(255 255 255 / 12%)',
+      },
+      '--pp-surface-header-veil': {
+        light: 'rgb(255 255 255 / 65%)',
+        dark: 'rgb(20 20 22 / 65%)',
       },
     }
 
@@ -61,6 +68,10 @@ html [class*="_root"]:has([data-conversation-region="chat"]) {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+}
+
+html [data-slot="conversation.header"] > * {
+  background-color: var(--pp-surface-header-veil);
 }
 
 [data-conversation-scroll]::before {
