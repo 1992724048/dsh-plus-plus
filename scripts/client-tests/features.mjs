@@ -622,19 +622,24 @@ test("every host permission label maps to a mode", async () => {
     'an unknown label must not map to any mode')
 })
 
-test('the attach and model triggers are borderless, and the model sits 4px from the send button', async () => {
+test('the attach, model and send buttons are borderless, and the model sits 4px from the send button', async () => {
   // Three small asks on the same controls. None of them may be folded into the
   // shared trigger rule, because that rule is shared with the permission button and
   // changing it there would move a control the user did not ask about.
   const { css } = await featureOf('composer')
 
   // Borderless. The generic control rule gives every button a hairline; the attach
-  // trigger removes its own inside the accent rule it shares with its structural
-  // fallback, and the model removes its in the standalone override below.
+  // and send triggers remove their own inside their accent rules, and the model
+  // removes its in the standalone override below.
   const attach = rulesMatching(css, 'button[aria-haspopup="listbox"]')
     .find(rule => /border:\s*0/.test(rule.body))
   assert.ok(attach, 'the attach trigger must carry its own borderless declaration')
   assert.doesNotMatch(attach.body, /border:\s*1px/, 'and must not reinstate the hairline')
+
+  const send = rulesMatching(css, '[class*="_trailing"] > button:last-of-type')
+    .find(rule => /border:\s*0/.test(rule.body))
+  assert.ok(send, 'the send button must carry its own borderless declaration')
+  assert.doesNotMatch(send.body, /border:\s*1px/, 'and must not reinstate the hairline')
 
   const overrides = rulesMatching(css, '[data-slot="conversation.input.model"] button')
     .filter(rule => !rule.selector.includes(','))

@@ -213,6 +213,7 @@ window.__ModuleLoader__.load({
 
 [data-composer-card] [class*="_trailing"] > button:last-of-type {
   background: var(--pp-composer-accent);
+  border: 0;
   color: var(--pp-composer-accent-ink);
   width: var(--pp-composer-control-size);
   height: var(--pp-composer-control-size);
