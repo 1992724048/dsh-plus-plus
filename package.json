@@ -29,6 +29,7 @@
     "client.js",
     "client.*.js",
     "src",
+    "imgs",
     "icon.svg",
     "cordis.patch.yml",
     "README.md"

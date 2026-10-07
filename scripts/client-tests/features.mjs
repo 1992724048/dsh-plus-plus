@@ -999,11 +999,16 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
   // The layer tokens must NOT be touched: they are the raised surfaces inside
   // whichever column they appear in, and re-pointing them would leave every popup a
   // shade belonging to neither column.
-  const { palette } = await featureOf('surface')
+  const { palette, css } = await featureOf('surface')
   assert.deepEqual(
     [...Object.keys(palette)].sort(),
+    ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill', '--pp-surface-chat-image'],
+    'the swap owns the two column tokens plus its own backdrop token, and nothing else',
+  )
+  assert.deepEqual(
+    Object.keys(palette).filter(token => token.startsWith('--dsw-')).sort(),
     ['--dsw-alias-bg-base', '--dsw-specific-sidebar-fill'],
-    'the swap must touch exactly the two column tokens and nothing else',
+    'the swap must touch exactly the two column tokens of the host and no layer token',
   )
   for (const token of Object.keys(palette)) {
     assert.deepEqual([...Object.keys(palette[token])].sort(), ['dark', 'light'],
@@ -1019,4 +1024,25 @@ test('the surface swap exchanges exactly the two host tokens', async () => {
     assert.match(chat, /^rgb\(/, `${scheme}: chat must be a concrete colour, not a var() cycle`)
     assert.match(sidebar, /^rgb\(/, `${scheme}: sidebar must be a concrete colour`)
   }
+})
+
+test('the chat column carries the themed backdrop image', async () => {
+  const { palette, css } = await featureOf('surface')
+
+  const image = palette['--pp-surface-chat-image']
+  assert.equal(image.light, 'url("/api/dsh-plus-plus/assets/bk.jpg")',
+    'light: the backdrop is bk')
+  assert.equal(image.dark, 'url("/api/dsh-plus-plus/assets/bg.jpg")',
+    'dark: the backdrop is bg')
+
+  const rule = /\[data-conversation-region="chat"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(rule, 'the chat region must carry the image rule')
+  assert.match(rule[1], /background-image:\s*var\(--pp-surface-chat-image\)/,
+    'the image must come from the palette so the host can flip it with the scheme')
+  assert.match(rule[1], /background-size:\s*cover/, 'and cover the column')
+
+  assert.doesNotMatch(css, /assets\/bk\.jpg/,
+    'the stylesheet must not hard-code an image URL — only the palette may name it')
+  assert.doesNotMatch(rule[1], /background:\s/,
+    'the backdrop must add an image layer, never replace the column colour')
 })

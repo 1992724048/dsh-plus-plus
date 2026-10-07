@@ -17,6 +17,7 @@ import path from 'node:path'
 import * as plugin from '../index.js'
 import { FONT_ROUTE, assetRoot } from '../src/fonts.js'
 import { SESSION_ROUTE, encodeSegment, projectKey } from '../src/sessions.js'
+import { ASSET_ROUTE } from '../src/assets.js'
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -128,18 +129,18 @@ test('plugin entry declares its identity and takes no hard dependency', () => {
 })
 
 test('registers one prefix route per feature and tears them all down', () => {
-  // One route per feature, so the count is now two: the font assets and the session
-  // delete endpoint. Asserted by path rather than by index or total, so adding a
-  // feature later cannot silently satisfy or break this.
+  // One route per feature, so the count is now three: the font assets, the session
+  // delete endpoint, and the chat backdrop images. Asserted by path rather than by
+  // index or total, so adding a feature later cannot silently satisfy or break this.
   const ctx = createStub()
   const dispose = plugin.apply(ctx)
 
-  for (const path of [FONT_ROUTE, SESSION_ROUTE]) {
+  for (const path of [FONT_ROUTE, SESSION_ROUTE, ASSET_ROUTE]) {
     const route = routeFor(ctx, path)
     assert.ok(route, `${path} must be registered`)
     assert.equal(route.kind, 'prefix')
   }
-  assert.equal(ctx.routes.length, 2, 'exactly one route per feature, and no others')
+  assert.equal(ctx.routes.length, 3, 'exactly one route per feature, and no others')
 
   dispose()
   assert.equal(ctx.routes.length, 0, 'every route must be removed on teardown')
@@ -152,7 +153,7 @@ test('the routes install when the webServer service appears, not only at apply t
     'nothing may register before the service exists')
 
   ctx.startWebServer()
-  assert.deepEqual(ctx.routes.map(route => route.path).sort(), [FONT_ROUTE, SESSION_ROUTE].sort(),
+  assert.deepEqual(ctx.routes.map(route => route.path).sort(), [FONT_ROUTE, SESSION_ROUTE, ASSET_ROUTE].sort(),
     'the loader starts rows concurrently, so apply runs while webServer is still coming up — a one-shot get there registers nothing and the browser DELETE falls through to the /api channel as "not found"')
 })
 
@@ -248,11 +249,11 @@ test('applying twice does not collide — the hot-reload case', () => {
   // instance applied again, and a *fresh* instance (a real hot reload) applied
   // against a server that already owns the route.
   const first = createStub()
-  const ALL = [FONT_ROUTE, SESSION_ROUTE]
+  const ALL = [FONT_ROUTE, SESSION_ROUTE, ASSET_ROUTE]
   const count = () => ALL.filter(path => routeFor(first, path) !== undefined).length
 
   const disposeA = plugin.apply(first, {})
-  assert.equal(count(), ALL.length, 'both routes register on the first apply')
+  assert.equal(count(), ALL.length, 'every route registers on the first apply')
 
   // Same instance, applied again: no second registration, and the second holder
   // releasing must not pull the routes out from under the first.
@@ -428,6 +429,42 @@ test('the path encoders match the host byte for byte', () => {
   // outright instead of encoding first.
   const id = 'session-3e0f1723-35cd-40c0-b17a-7f300dd85591'
   assert.equal(encodeSegment(id), id)
+})
+
+test('serves a chat backdrop image as a real JPEG', async () => {
+  const ctx = createStub()
+  plugin.apply(ctx)
+
+  const light = await call(ctx, ASSET_ROUTE, `${ASSET_ROUTE}/bk.jpg`, 'GET')
+  assert.equal(light.status, 200)
+  assert.equal(light.headers['content-type'], 'image/jpeg')
+  assert.deepEqual([...light.body.subarray(0, 2)], [0xff, 0xd8],
+    'the bytes must be a JPEG, not a renamed file')
+  assert.match(light.headers['cache-control'], /no-store/,
+    'the backdrops change during design — never serve them from cache')
+
+  const dark = await call(ctx, ASSET_ROUTE, `${ASSET_ROUTE}/bg.jpg`, 'GET')
+  assert.equal(dark.status, 200, 'the dark backdrop must be served too')
+})
+
+test('the asset route refuses anything that is not a top-level image', async () => {
+  const ctx = createStub()
+  plugin.apply(ctx)
+
+  const refused = [
+    [`${ASSET_ROUTE}/..%2f..%2fpackage.json`, 400],
+    [`${ASSET_ROUTE}/%2e%2e/package.json`, 400],
+    [`${ASSET_ROUTE}/nested/bk.jpg`, 400],
+    [`${ASSET_ROUTE}/index.js`, 403],
+    [`${ASSET_ROUTE}/nope.jpg`, 404],
+  ]
+  for (const [url, expected] of refused) {
+    const { status } = await call(ctx, ASSET_ROUTE, url, 'GET')
+    assert.equal(status, expected, `${url} must be refused with ${expected}, got ${status}`)
+  }
+
+  assert.equal((await call(ctx, ASSET_ROUTE, `${ASSET_ROUTE}/bk.jpg`, 'POST')).status, 405,
+    'a background image needs GET and nothing else')
 })
 // ── runner ───────────────────────────────────────────────────────────────────
 
