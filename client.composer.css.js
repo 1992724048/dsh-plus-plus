@@ -92,6 +92,26 @@ window.__ModuleLoader__.load({
   gap: 4px;
 }
 
+[data-composer-card] [class*="_modes"] {
+  order: 1;
+}
+
+[data-composer-card] .pp-attach {
+  background: var(--pp-composer-tool);
+  border: 0;
+  color: var(--pp-composer-tool-ink);
+  width: var(--pp-composer-control-size);
+  height: var(--pp-composer-control-size);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+[data-composer-card] .pp-attach:hover:not(:disabled) {
+  background: var(--pp-composer-accent-hover);
+  color: var(--pp-composer-accent-hover-ink);
+}
+
 [data-composer-card] [class*="_trailing"] {
   gap: 4px;
 }
