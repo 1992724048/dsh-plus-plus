@@ -77,12 +77,12 @@ window.__ModuleLoader__.load({
     const EFFORT_ATTR = 'data-pp-effort'
 
     const EFFORT_MATCH = [
-      { index: 4, words: ['最高', '最大', 'max', 'ultra', 'very high'] },
+      { index: 5, words: ['最高', '最大', 'max', 'ultra', 'very high'] },
+      { index: 4, words: ['高', 'high'] },
+      { index: 3, words: ['中', '中等', 'medium', 'mid'] },
+      { index: 2, words: ['低', 'low'] },
+      { index: 1, words: ['默认', 'default', '供应商默认', 'provider default'] },
       { index: 0, words: ['关闭', '禁用', '无', 'none', 'off', 'disable'] },
-      { index: 3, words: ['高', 'high'] },
-      { index: 2, words: ['中', '中等', 'medium', 'mid'] },
-      { index: 1, words: ['低', 'low'] },
-      { index: 5, words: ['默认', 'default', '供应商默认', 'provider default'] },
     ]
 
     function effortLevel(text) {
