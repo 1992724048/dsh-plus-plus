@@ -6,6 +6,14 @@ window.__ModuleLoader__.load({
     const FAN_TRIGGER = '[aria-haspopup="listbox"][aria-expanded="true"]'
     const FAN_ROW = '[role="option"], [role="menuitem"], [role="menuitemradio"]'
 
+    let missing = false
+
+    function miss(message) {
+      if (missing) return
+      missing = true
+      console.warn(message)
+    }
+
     function clearFan() {
       document.querySelectorAll('[data-pp-fan]').forEach((panel) => {
         panel.removeAttribute('data-pp-fan')
@@ -21,11 +29,15 @@ window.__ModuleLoader__.load({
       const trigger = document.querySelector(FAN_TRIGGER)
       if (trigger === null) {
         clearFan()
+        missing = false
         return
       }
       const list = [...document.querySelectorAll('[role="listbox"], [role="menu"]')]
         .find((element) => element.querySelector(FAN_ROW) !== null)
-      if (list === undefined) return
+      if (list === undefined) {
+        miss('dsh-plus-plus: command fan found no menu container')
+        return
+      }
       let panel = list
       while (
         panel !== null
@@ -39,7 +51,11 @@ window.__ModuleLoader__.load({
       list.setAttribute('data-pp-fan', '')
       if (panel !== list) panel.setAttribute('data-pp-fan', '')
       const rows = [...list.querySelectorAll(FAN_ROW)]
-      if (rows.length === 0) return
+      if (rows.length === 0) {
+        miss('dsh-plus-plus: command fan found no menu rows')
+        return
+      }
+      missing = false
       const rect = trigger.getBoundingClientRect()
       const cx = rect.left + rect.width / 2
       const cy = rect.top - 12

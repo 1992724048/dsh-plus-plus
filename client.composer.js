@@ -64,8 +64,18 @@ window.__ModuleLoader__.load({
         const CSS = parts.map(part => part.CSS).filter(Boolean).join('\n')
         registerStyles(ctx, `${CSS}\n${declarations.SEAT_CSS}`, 'composer')
 
-        const behaviors = await Promise.all(BEHAVIORS.map(name => require.async(name)))
-        for (const behavior of behaviors) behavior.install(ctx)
+        const behaviors = await Promise.allSettled(BEHAVIORS.map(name => require.async(name)))
+        for (const behavior of behaviors) {
+          if (behavior.status === 'rejected') {
+            console.error('dsh-plus-plus: composer behavior load failed', behavior.reason)
+            continue
+          }
+          try {
+            behavior.value.install(ctx)
+          } catch (error) {
+            console.error('dsh-plus-plus: composer behavior install failed', error)
+          }
+        }
       },
     }
     return module.exports
