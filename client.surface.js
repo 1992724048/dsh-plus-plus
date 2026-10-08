@@ -87,6 +87,16 @@ html[data-windows-titlebar] [class*="_frame"]::before {
   backdrop-filter: blur(var(--pp-surface-blur));
 }
 
+html body[style*="--pp-lightbox-open"] [class*="_frame"]::before {
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html body[style*="--pp-lightbox-open"] > span[style*="--dsw-specific-sidebar-fill"] {
+  background-color: transparent !important;
+}
+
 html [data-slot="conversation.header"] > * {
   position: absolute;
   top: 0;
@@ -209,6 +219,22 @@ html [class*="_frame"][data-rightbar-collapsed] > [class*="_rightbarCol"] {
             if (observer) observer.disconnect()
           }
         }, 'dsh-plus-plus: conversation header')
+
+        ctx.effect(() => {
+          if (document.body === null) return () => {}
+          const sync = () => {
+            const open = document.body.querySelector(':scope > .backdrop[role="dialog"]') !== null
+            if (open) document.body.style.setProperty('--pp-lightbox-open', '1')
+            else document.body.style.removeProperty('--pp-lightbox-open')
+          }
+          const observer = new MutationObserver(sync)
+          observer.observe(document.body, { childList: true })
+          sync()
+          return () => {
+            observer.disconnect()
+            document.body.style.removeProperty('--pp-lightbox-open')
+          }
+        }, 'dsh-plus-plus: image lightbox caption')
       },
     }
     return module.exports
