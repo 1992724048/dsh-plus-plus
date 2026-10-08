@@ -715,23 +715,31 @@ test('the composer icons are thin and stable while the thread scrolls', async ()
     'a backdrop-filtered button re-rasters against the scrolled backdrop and drags its glyph with it')
 
   const attachment = palette['--pp-composer-attachment']
-  assert.equal(attachment.light, '#F56C6C', 'light: the image chip is red')
+  assert.equal(attachment.light, '#F56C6C', 'light: the remove button is red')
   assert.equal(attachment.dark, '#F56C6C', 'dark: and stays red')
   assert.equal(palette['--pp-composer-attachment-ink'].light, '#fff', 'with a white icon')
 
-  const tile = /\[data-slot="conversation\.input\.attachments"\] \[class\*="_thumbnail"\]\s*\{([^}]*)\}/.exec(css)
-  assert.ok(tile, 'the image chip must carry its own tile rule')
-  assert.match(tile[1], /background:\s*var\(--pp-composer-attachment\)/, 'red fill from the palette')
-  assert.doesNotMatch(tile[1], /#/, 'and no literal may paint it')
+  const remove = /\[data-slot="conversation\.input\.attachments"\] \[class\*="_remove"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(remove, 'the remove button must carry the red tile')
+  assert.match(remove[1], /background:\s*var\(--pp-composer-attachment\)/, 'red fill from the palette')
+  assert.match(remove[1], /color:\s*var\(--pp-composer-attachment-ink\)/, 'white icon from the palette')
+  assert.match(remove[1], /opacity:\s*1(?!\d)/,
+    'the host parks it at opacity 0 until hover — that is why it read as invisible')
 
-  const preview = /\[class\*="_thumbnail"\] img\s*\{([^}]*)\}/.exec(css)
-  assert.ok(preview, 'the preview must be addressed')
-  assert.match(preview[1], /display:\s*none/, 'the chip is a red tile, so the preview img stays out of it')
+  assert.doesNotMatch(css, /\[class\*="_thumbnail"\]\s*\{[^}]*background:\s*var\(--pp-composer-attachment\)/,
+    'the red belongs to the remove button, not to the image chip')
+  assert.doesNotMatch(css, /\[class\*="_thumbnail"\] img\s*\{[^}]*display:\s*none/,
+    'the image chip must show its preview again')
 
-  const glyph = /\[class\*="_thumbnail"\]::after\s*\{([^}]*)\}/.exec(css)
-  assert.ok(glyph, 'the icon must be drawn by the chip itself')
-  assert.match(glyph[1], /-webkit-mask:\s*url\("data:image\/svg\+xml/, 'a masked glyph, not an emoji')
-  assert.match(glyph[1], /background:\s*var\(--pp-composer-attachment-ink\)/, 'painted white from the palette')
+  const card = /\[data-composer-card\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(card, 'the card rule must exist')
+  assert.match(card[1], /padding:\s*0 0 var\(--pp-composer-block-gap\)/,
+    'no top padding — the queue dock is designed to merge into the input, and the padding opened a gap')
+
+  const queue = /html \[data-conversation-region\] \[class\*="_dock"\]:not\(\[data-composer-card\] ~ \*\)\s*\{([^}]*)\}/.exec(css)
+  assert.ok(queue, 'the pre-card dock must be addressed')
+  assert.match(queue[1], /margin-bottom:\s*calc\(0px - var\(--dsh-composer-stack-gap, 6px\) - 3px\)/,
+    'the host formula, with a fallback — its var does not resolve where the queue dock lives, so the pull-up never applied')
 })
 
 test('the send button is found structurally, not via a slot that hides', async () => {
