@@ -152,7 +152,8 @@ window.__ModuleLoader__.load({
 [data-composer-card] [data-slot="conversation.input.permission"] button {
   border: 0;
   transition: background-color var(--pp-composer-accent-transition) ease,
-              color var(--pp-composer-accent-transition) ease;
+              color var(--pp-composer-accent-transition) ease,
+              box-shadow var(--pp-composer-accent-transition) ease;
 }
 
 [data-composer-card] [data-slot="conversation.input.permission"] button[data-pp-mode="readonly"] {
@@ -171,8 +172,7 @@ window.__ModuleLoader__.load({
 }
 
 [data-composer-card] [data-slot="conversation.input.permission"] button:hover:not(:disabled) {
-  background: var(--pp-composer-permission-hover);
-  color: inherit;
+  box-shadow: inset 0 0 0 999px var(--pp-composer-permission-hover);
 }
 
 [data-composer-card] [data-slot="conversation.input.permission"] [class*="_chevron"] {
