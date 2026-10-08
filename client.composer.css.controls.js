@@ -53,6 +53,8 @@ window.__ModuleLoader__.load({
   overflow: hidden;
   --fan-x: 0px;
   --fan-y: 0px;
+  --pull-x: 0px;
+  --pull-y: 0px;
   transform: translate(-50%, -50%);
   transition: transform .18s ease, background-color .12s ease;
   animation: pp-fan-open .24s cubic-bezier(.2, .8, .3, 1.1);
@@ -84,7 +86,7 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-accent-hover, #ffee22) !important;
   color: var(--pp-composer-accent-hover-ink, #000);
   outline: none;
-  transform: translate(-50%, -50%) scale(1.12);
+  transform: translate(-50%, -50%) translate(var(--pull-x), var(--pull-y)) scale(1.12);
   box-shadow: 0 4px 12px rgb(0 0 0 / 35%);
 }
 

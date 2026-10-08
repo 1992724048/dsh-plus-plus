@@ -25,6 +25,8 @@ window.__ModuleLoader__.load({
         row.style.top = ''
         row.style.removeProperty('--fan-x')
         row.style.removeProperty('--fan-y')
+        row.style.removeProperty('--pull-x')
+        row.style.removeProperty('--pull-y')
       })
     }
 
@@ -73,7 +75,7 @@ window.__ModuleLoader__.load({
       rows.forEach((row) => {
         if (!row.hasAttribute('data-pp-fan-item')) row.setAttribute('data-pp-fan-item', '')
       })
-      const radius = Math.max(36, Math.min(200, (rows.length * 36) / Math.PI))
+      const radius = Math.max(32, Math.min(200, (rows.length * 28) / Math.PI))
       const rect = trigger.getBoundingClientRect()
       const cx = rect.left + rect.width / 2
       const cy = rect.top - 12
@@ -91,6 +93,8 @@ window.__ModuleLoader__.load({
         if (row.style.getPropertyValue('--fan-x').trim() !== fanX) {
           row.style.setProperty('--fan-x', fanX)
           row.style.setProperty('--fan-y', `${stepY}px`)
+          row.style.setProperty('--pull-x', `${Math.round(Math.cos(angle) * 14)}px`)
+          row.style.setProperty('--pull-y', `${Math.round(-Math.sin(angle) * 14)}px`)
         }
         const name = (row.textContent ?? '').trim()
         if (name !== '' && row.getAttribute('title') !== name) row.setAttribute('title', name)
