@@ -6,6 +6,7 @@ window.__ModuleLoader__.load({
 
     const React = require('react')
     const { createElement: h } = React
+    const { IconSettingsOutlineMedium } = require('@deepseek-ai/dsh-client-ui-primitives')
 
     const CHUNKS = [
       './client.core.js',
@@ -62,14 +63,16 @@ window.__ModuleLoader__.load({
 }
 .pp-settings {
   box-sizing: border-box;
+  width: 26px;
   height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  margin-left: auto;
+  padding: 0;
+  border: 0;
   border-radius: 0;
-  background: var(--dsw-alias-bg-layer-1);
+  background: transparent;
   color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 12px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
 }
 .pp-settings:hover {
@@ -101,8 +104,9 @@ window.__ModuleLoader__.load({
         type: 'button',
         className: 'pp-settings',
         'aria-label': label,
+        title: label,
         onClick: open,
-      }, label)
+      }, h(IconSettingsOutlineMedium, { size: 16 }))
     }
 
     function SettingsPage({ t, listFeatures }) {
