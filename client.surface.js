@@ -103,7 +103,7 @@ html [class*="composerSeat"] {
 html [data-conversation-region] [data-composer-card] ~ [class*="_dock"] {
   position: fixed;
   top: calc(var(--dsh-frame-top-clearance, 0px) + var(--pp-header-height, 76px));
-  right: 28px;
+  right: 12px;
   transform: translateY(calc(-100% - 7px));
 }
 
