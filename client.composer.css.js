@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     const module = { exports: {} }
 
     const PALETTE = {
-      '--pp-composer-surface': { light: 'rgb(255 255 255 / 50%)', dark: '#000' },
+      '--pp-composer-surface': { light: 'rgb(255 255 255 / 50%)', dark: 'rgb(0 0 0 / 60%)' },
       '--pp-composer-blur': { light: '16px', dark: '16px' },
       '--pp-composer-placeholder-ink': { light: 'rgb(0 0 0 / 62%)', dark: 'rgb(255 255 255 / 78%)' },
       '--pp-composer-permission-readonly': { light: '#67C23A', dark: '#67C23A' },
@@ -21,8 +21,8 @@ window.__ModuleLoader__.load({
       '--pp-composer-trigger-hover': { light: 'rgb(255 255 255 / 14%)', dark: 'rgb(255 255 255 / 14%)' },
       '--pp-composer-tool': { light: '#fff', dark: '#000' },
       '--pp-composer-tool-ink': { light: '#000', dark: '#fff' },
-      '--pp-composer-accent': { light: '#fff', dark: '#fff' },
-      '--pp-composer-accent-ink': { light: '#000', dark: '#000' },
+      '--pp-composer-accent': { light: '#fff', dark: '#000' },
+      '--pp-composer-accent-ink': { light: '#000', dark: '#fff' },
       '--pp-composer-accent-hover': { light: '#ffee22', dark: '#ffee22' },
       '--pp-composer-accent-hover-ink': { light: '#000', dark: '#000' },
       '--pp-composer-accent-transition': { light: '200ms', dark: '200ms' },
