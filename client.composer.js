@@ -76,21 +76,22 @@ window.__ModuleLoader__.load({
 
     const EFFORT_ATTR = 'data-pp-effort'
 
-    const EFFORT_LEVELS = [
-      { level: 'max', words: ['最高', '最大', 'max', 'ultra', 'very high'] },
-      { level: 'high', words: ['高', 'high'] },
-      { level: 'medium', words: ['中', 'medium'] },
-      { level: 'low', words: ['低', 'low'] },
-      { level: 'off', words: ['关闭', '禁用', '无', 'none', 'off', 'disable'] },
+    const EFFORT_MATCH = [
+      { index: 4, words: ['最高', '最大', 'max', 'ultra', 'very high'] },
+      { index: 0, words: ['关闭', '禁用', '无', 'none', 'off', 'disable'] },
+      { index: 3, words: ['高', 'high'] },
+      { index: 2, words: ['中', '中等', 'medium', 'mid'] },
+      { index: 1, words: ['低', 'low'] },
+      { index: 5, words: ['默认', 'default', '供应商默认', 'provider default'] },
     ]
 
     function effortLevel(text) {
       const value = text.trim().toLowerCase()
       if (value === '') return undefined
-      for (const entry of EFFORT_LEVELS) {
-        if (entry.words.some(word => value.includes(word))) return entry.level
+      for (const entry of EFFORT_MATCH) {
+        if (entry.words.some(word => value.includes(word))) return String(entry.index)
       }
-      return 'off'
+      return '0'
     }
 
     function watchEffort(span) {
