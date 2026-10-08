@@ -100,7 +100,7 @@ window.__ModuleLoader__.load({
   border-radius: 0;
   box-shadow: none;
   background: var(--pp-composer-control);
-  transform: none;
+  transform: translateZ(0);
   align-self: center;
   vertical-align: middle;
 }
