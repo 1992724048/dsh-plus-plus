@@ -29,7 +29,7 @@ window.__ModuleLoader__.load({
       '--pp-composer-stroke': { light: 'rgb(0 0 0 / 16%)', dark: 'rgb(255 255 255 / 22%)' },
       '--pp-composer-control': { light: 'rgb(255 255 255 / 12%)', dark: 'rgb(255 255 255 / 12%)' },
       '--pp-composer-hover': { light: 'rgb(255 255 255 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
-      '--pp-composer-queue': { light: 'rgb(255 255 255 / 35%)', dark: 'rgb(255 255 255 / 35%)' },
+      '--pp-composer-queue': { light: 'rgb(255 255 255 / 35%)', dark: 'rgb(0 0 0 / 45%)' },
       '--pp-composer-attachment': { light: '#F56C6C', dark: '#F56C6C' },
       '--pp-composer-attachment-ink': { light: '#fff', dark: '#fff' },
       '--pp-composer-stop': { light: '#F56C6C', dark: '#F56C6C' },
