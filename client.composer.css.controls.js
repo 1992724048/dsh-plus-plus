@@ -55,7 +55,7 @@ window.__ModuleLoader__.load({
   --fan-y: 0px;
   --pull-x: 0px;
   --pull-y: 0px;
-  transform: translate(-50%, -50%) translate(var(--fan-x), var(--fan-y));
+  transform: translate(-50%, -50%);
   transition: transform .18s ease;
   animation: pp-fan-open .24s cubic-bezier(.2, .8, .3, 1.1);
 }
@@ -63,11 +63,11 @@ window.__ModuleLoader__.load({
 @keyframes pp-fan-open {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(.4);
+    transform: translate(-50%, -50%) translate(calc(-1 * var(--fan-x)), calc(-1 * var(--fan-y))) scale(.4);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) translate(var(--fan-x), var(--fan-y));
+    transform: translate(-50%, -50%);
   }
 }
 
@@ -86,7 +86,7 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-accent-hover);
   color: var(--pp-composer-accent-hover-ink);
   outline: none;
-  transform: translate(-50%, -50%) translate(calc(var(--fan-x) + var(--pull-x)), calc(var(--fan-y) + var(--pull-y))) scale(1.08);
+  transform: translate(-50%, -50%) translate(var(--pull-x), var(--pull-y)) scale(1.08);
 }
 
 [data-pp-fan] [data-pp-fan-item][aria-selected="true"]:not(:hover),

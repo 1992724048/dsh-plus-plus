@@ -75,8 +75,7 @@ window.__ModuleLoader__.load({
       rows.forEach((row) => {
         if (!row.hasAttribute('data-pp-fan-item')) row.setAttribute('data-pp-fan-item', '')
       })
-      const widest = rows.reduce((max, row) => Math.max(max, row.getBoundingClientRect().width), 0)
-      const radius = Math.max(64, Math.min(240, (rows.length * (widest + 8)) / Math.PI))
+      const radius = Math.max(64, Math.min(240, (rows.length * 52) / Math.PI))
       const rect = trigger.getBoundingClientRect()
       const cx = rect.left + rect.width / 2
       const cy = rect.top - 12
@@ -84,14 +83,16 @@ window.__ModuleLoader__.load({
         const angle = rows.length === 1
           ? Math.PI / 2
           : Math.PI - (Math.PI * index) / (rows.length - 1)
-        const left = `${Math.round(cx)}px`
-        const top = `${Math.round(cy)}px`
+        const stepX = Math.round(Math.cos(angle) * radius)
+        const stepY = Math.round(-Math.sin(angle) * radius)
+        const left = `${Math.round(cx + stepX)}px`
+        const top = `${Math.round(cy + stepY)}px`
         if (row.style.left !== left) row.style.left = left
         if (row.style.top !== top) row.style.top = top
-        const fanX = `${Math.round(Math.cos(angle) * radius)}px`
+        const fanX = `${stepX}px`
         if (row.style.getPropertyValue('--fan-x').trim() !== fanX) {
           row.style.setProperty('--fan-x', fanX)
-          row.style.setProperty('--fan-y', `${Math.round(-Math.sin(angle) * radius)}px`)
+          row.style.setProperty('--fan-y', `${stepY}px`)
           row.style.setProperty('--pull-x', `${Math.round(Math.cos(angle) * 10)}px`)
           row.style.setProperty('--pull-y', `${Math.round(-Math.sin(angle) * 10)}px`)
         }
