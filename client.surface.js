@@ -100,13 +100,11 @@ html [class*="composerSeat"] {
   z-index: 9 !important;
 }
 
-html [class*="_heroWorkspaceRow"] {
+html [data-conversation-region] [class*="_root"]:has(> [aria-haspopup="dialog"]) {
   position: fixed;
   top: calc(var(--dsh-frame-top-clearance, 0px) + var(--pp-header-height, 76px));
   right: 28px;
   transform: translateY(-100%);
-  margin-top: 0;
-  padding: 0;
 }
 
 html[data-windows-titlebar] [class*="_frame"]:not([data-rightbar-collapsed]) {
@@ -130,23 +128,18 @@ html [class*="_body"] > [class*="_workspaceRow"] {
 }
 
 html [class*="_frame"][data-rightbar-collapsed] > [class*="_rightbarCol"] {
-  display: none;
-}
-
-@keyframes pp-panel-in {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(20px);
 }
 
 @media (prefers-reduced-motion: no-preference) {
   html [class*="_frame"] > [class*="_rightbarCol"] {
-    animation: pp-panel-in .18s ease-out;
+    transition: opacity .16s ease, transform .16s ease;
+  }
+
+  html [class*="_frame"][data-rightbar-collapsed] > [class*="_rightbarCol"] {
+    transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s;
   }
 }
 

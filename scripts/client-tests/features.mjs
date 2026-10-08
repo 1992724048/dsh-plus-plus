@@ -534,15 +534,18 @@ test('the permission button is borderless and coloured by its mode', async () =>
       token + ' is a mode colour, not a theme colour — it must not invert')
   }
 
-  // Focus is the host's own ring — the same one the attach button draws, because
-  // the ask was to sync the two, not to invent a second focus language.
-  const focus = /\[data-slot="conversation\.input\.permission"\] button:focus-visible\s*\{([^}]*)\}/.exec(css)
-  assert.ok(focus, 'the permission button needs a focus rule')
-  assert.match(focus[1],
-    /outline:\s*var\(--dsw-focus-ring-width\) solid var\(--dsw-focus-ring-color, var\(--dsw-alias-state-business-primary\)\)/,
-    'focus must draw the host ring, exactly as the attach button does')
+  // Focus is one shared ring across every composer button — that IS the sync the
+  // user asked for. The width is a literal: the host's --dsh-focus-ring-width was
+  // not resolvable here, and an invalid outline renders nothing at all, which is
+  // how the button ended up looking focus-transparent.
+  const focus = /\[data-composer-card\] :is\(button, \[role="button"\]\):focus-visible\s*\{([^}]*)\}/.exec(css)
+  assert.ok(focus, 'one shared focus rule must cover every composer button')
+  assert.match(focus[1], /outline:\s*2px solid var\(--dsw-focus-ring-color, var\(--dsw-alias-state-business-primary\)\)/,
+    'the host ring colour with a literal width, so it always renders')
   assert.doesNotMatch(focus[1], /background:/,
-    'and must not repaint the mode fill under focus')
+    'and it must not repaint the mode fill under focus')
+  assert.doesNotMatch(css, /\[data-slot="conversation\.input\.permission"\] button:focus-visible/,
+    'the permission button keeps no private focus rule — one rule is what syncs it to the attach button')
 
   const chevron = /\[data-slot="conversation\.input\.permission"\] \[class\*="_chevron"\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(chevron, 'the permission chevron needs its own rule')
@@ -1177,30 +1180,32 @@ test('the session side panel floats over the thread instead of squeezing it', as
 
   const closed = /html \[class\*="_frame"\]\[data-rightbar-collapsed\] > \[class\*="_rightbarCol"\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(closed, 'the closed panel must be addressed')
-  assert.match(closed[1], /display:\s*none/,
-    'once out of the grid the host no longer clips an empty column — it has to be hidden by hand')
+  assert.match(closed[1], /visibility:\s*hidden/, 'the closed state hides without display, so close can animate')
+  assert.match(closed[1], /opacity:\s*0(?!\d)/, 'faded out')
+  assert.match(closed[1], /transform:\s*translateX\(20px\)/, 'and slid back out to the right')
+  assert.doesNotMatch(closed[1], /display:\s*none/,
+    'display:none has no dying frame — the panel would vanish instead of closing')
 
   const seat = /html \[class\*="composerSeat"\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(seat, 'the composer seat needs an explicit rung')
   assert.match(seat[1], /z-index:\s*9 !important/,
     'the host pins it at 7 with triple-class specificity — above the header, below the panel')
 
-  const sessionInfo = /html \[class\*="_heroWorkspaceRow"\]\s*\{([^}]*)\}/.exec(css)
-  assert.ok(sessionInfo, 'the session info row must be relocated')
-  assert.match(sessionInfo[1], /position:\s*fixed(?![\w-])/,
-    'only fixed escapes the seat layout and lands it in the bar')
-  assert.match(sessionInfo[1], /top:\s*calc\(var\(--dsh-frame-top-clearance, 0px\) \+ var\(--pp-header-height, 76px\)\)/,
+  const meter = /html \[data-conversation-region\] \[class\*="_root"\]:has\(> \[aria-haspopup="dialog"\]\)\s*\{([^}]*)\}/.exec(css)
+  assert.ok(meter, 'the context meter must be relocated')
+  assert.match(meter[1], /position:\s*fixed(?![\w-])/,
+    'fixed escapes the composer stack and lands it in the bar')
+  assert.match(meter[1], /top:\s*calc\(var\(--dsh-frame-top-clearance, 0px\) \+ var\(--pp-header-height, 76px\)\)/,
     'anchored to the measured bottom edge of the bar')
-  assert.match(sessionInfo[1], /transform:\s*translateY\(-100%\)/,
-    'sitting above that line = in the bar, on the tabs row')
+  assert.match(meter[1], /transform:\s*translateY\(-100%\)/,
+    'parked above that line = on the tabs row, right side')
 
-  const keyframes = /@keyframes pp-panel-in \{([\s\S]*?)\}\s*\n/.exec(css)
-  assert.ok(keyframes, 'the pop-in animation must be declared')
-  assert.match(keyframes[1], /from \{\s*opacity: 0;\s*transform: translateX\(20px\)/,
-    'fade and slide in from the right')
-  const motion = /@media \(prefers-reduced-motion: no-preference\)\s*\{\s*html \[class\*="_frame"\] > \[class\*="_rightbarCol"\] \{([^}]*)\}/.exec(css)
-  assert.ok(motion, 'the animation must sit behind the reduced-motion guard')
-  assert.match(motion[1], /animation:\s*pp-panel-in \.18s ease-out/, 'and run on every open')
+  const media = /@media \(prefers-reduced-motion: no-preference\)\s*\{([\s\S]*?)\n\}/.exec(css)
+  assert.ok(media, 'the transitions must sit behind the reduced-motion guard')
+  assert.match(media[1], /transition:\s*opacity \.16s ease, transform \.16s ease;/,
+    'open and close both interpolate the same properties')
+  assert.match(media[1], /visibility 0s linear \.16s/,
+    'visibility waits for the fade, so closing animates instead of cutting')
 })
 
 test('the backdrop fills the window and every image layer shares one crop', async () => {

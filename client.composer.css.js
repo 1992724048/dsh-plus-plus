@@ -105,6 +105,11 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-hover);
 }
 
+[data-composer-card] :is(button, [role="button"]):focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
 [data-composer-card] [class*="_modes"] button,
 [data-composer-card] [data-slot="conversation.input.model"] button {
   height: var(--pp-composer-control-size);
@@ -166,11 +171,6 @@ window.__ModuleLoader__.load({
 [data-composer-card] [data-slot="conversation.input.permission"] button:hover:not(:disabled) {
   background: var(--pp-composer-permission-hover);
   color: inherit;
-}
-
-[data-composer-card] [data-slot="conversation.input.permission"] button:focus-visible {
-  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -2px;
 }
 
 [data-composer-card] [data-slot="conversation.input.permission"] [class*="_chevron"] {
