@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
       '--pp-composer-stroke': { light: 'rgb(0 0 0 / 16%)', dark: 'rgb(255 255 255 / 22%)' },
       '--pp-composer-control': { light: 'rgb(255 255 255 / 12%)', dark: 'rgb(255 255 255 / 12%)' },
       '--pp-composer-hover': { light: 'rgb(255 255 255 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
-      '--pp-composer-queue': { light: '#E9ECF1', dark: '#2E3035' },
+      '--pp-composer-queue': { light: 'rgb(255 255 255 / 35%)', dark: 'rgb(255 255 255 / 35%)' },
       '--pp-composer-attachment': { light: '#F56C6C', dark: '#F56C6C' },
       '--pp-composer-attachment-ink': { light: '#fff', dark: '#fff' },
       '--pp-composer-stop': { light: '#F56C6C', dark: '#F56C6C' },
@@ -281,6 +281,13 @@ html [data-conversation-region] [class*="_dock"]:not([data-composer-card] ~ *) {
 
 html [data-conversation-region="composer"] [class*="_panel"]::before {
   background: var(--pp-composer-queue);
+  -webkit-backdrop-filter: blur(var(--pp-composer-blur));
+  backdrop-filter: blur(var(--pp-composer-blur));
+}
+
+html:has([data-conversation-composer-overlay]) [data-composer-card],
+html:has([data-conversation-composer-overlay]) [data-slot="conversation.input.dock"] > * {
+  display: none;
 }
 
 [data-composer-card] ~ [class*="_dock"] {

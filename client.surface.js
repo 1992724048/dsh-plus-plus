@@ -75,6 +75,10 @@ html [class*="_root"]:has([data-conversation-region="chat"]) {
   background-repeat: no-repeat;
 }
 
+html [data-conversation-composer-overlay] {
+  background: var(--dsw-specific-sidebar-fill);
+}
+
 html[data-windows-titlebar] [class*="_frame"]::before {
   background-image: none;
   background-color: var(--pp-surface-header-veil);
