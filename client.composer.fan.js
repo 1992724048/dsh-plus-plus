@@ -21,10 +21,12 @@ window.__ModuleLoader__.load({
       })
       document.querySelectorAll('[data-pp-fan-item]').forEach((row) => {
         row.removeAttribute('data-pp-fan-item')
-        row.removeAttribute('data-pp-fan-start')
         row.style.left = ''
         row.style.top = ''
-        row.style.transform = ''
+        row.style.removeProperty('--fan-x')
+        row.style.removeProperty('--fan-y')
+        row.style.removeProperty('--pull-x')
+        row.style.removeProperty('--pull-y')
       })
     }
 
@@ -77,18 +79,16 @@ window.__ModuleLoader__.load({
         const angle = rows.length === 1
           ? Math.PI / 2
           : Math.PI - (Math.PI * index) / (rows.length - 1)
-        const left = `${Math.round(cx + Math.cos(angle) * radius)}px`
-        const top = `${Math.round(cy - Math.sin(angle) * radius)}px`
+        const left = `${Math.round(cx)}px`
+        const top = `${Math.round(cy)}px`
         if (row.style.left !== left) row.style.left = left
         if (row.style.top !== top) row.style.top = top
-        if (!row.hasAttribute('data-pp-fan-start')) {
-          row.setAttribute('data-pp-fan-start', '')
-          const x = Number.parseFloat(left)
-          const y = Number.parseFloat(top)
-          row.style.transform = `translate(-50%, -50%) translate(${Math.round(cx - x)}px, ${Math.round(cy - y)}px) scale(0.4)`
-          requestAnimationFrame(() => {
-            row.style.transform = ''
-          })
+        const fanX = `${Math.round(Math.cos(angle) * radius)}px`
+        if (row.style.getPropertyValue('--fan-x').trim() !== fanX) {
+          row.style.setProperty('--fan-x', fanX)
+          row.style.setProperty('--fan-y', `${Math.round(-Math.sin(angle) * radius)}px`)
+          row.style.setProperty('--pull-x', `${Math.round(Math.cos(angle) * 10)}px`)
+          row.style.setProperty('--pull-y', `${Math.round(-Math.sin(angle) * 10)}px`)
         }
         const name = (row.textContent ?? '').trim()
         if (name !== '' && row.getAttribute('title') !== name) row.setAttribute('title', name)
