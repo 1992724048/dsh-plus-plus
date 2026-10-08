@@ -27,7 +27,6 @@ window.__ModuleLoader__.load({
       '--pp-composer-hover': { light: 'rgb(255 255 255 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
       '--pp-composer-attachment': { light: '#F56C6C', dark: '#F56C6C' },
       '--pp-composer-attachment-ink': { light: '#fff', dark: '#fff' },
-      '--pp-composer-focus': { light: '#2563EB', dark: '#60a5fa' },
       '--pp-composer-disabled': { light: 'rgb(0 0 0 / 8%)', dark: 'rgb(255 255 255 / 10%)' },
       '--pp-composer-disabled-ink': { light: 'rgb(0 0 0 / 30%)', dark: 'rgb(255 255 255 / 30%)' },
     }
@@ -109,12 +108,8 @@ window.__ModuleLoader__.load({
 }
 
 [data-composer-card] :is(button, [role="button"]):focus-visible {
-  outline: 2px solid var(--pp-composer-focus);
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #2563EB));
   outline-offset: 2px;
-}
-
-[data-composer-card] :is(button, [role="button"]):focus:not(:focus-visible) {
-  outline: 0;
 }
 
 [data-composer-card] [class*="_modes"] button,
