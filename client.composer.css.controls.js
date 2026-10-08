@@ -81,13 +81,17 @@ window.__ModuleLoader__.load({
   display: none !important;
 }
 
-[data-pp-fan] [data-pp-fan-item]:hover,
-[data-pp-fan] [data-pp-fan-item][aria-selected="true"] {
+[data-pp-fan] [data-pp-fan-item]:hover {
   z-index: 5;
   background: var(--pp-composer-accent-hover);
   color: var(--pp-composer-accent-hover-ink);
   outline: none;
   transform: translate(-50%, -50%) translate(calc(var(--fan-x) + var(--pull-x)), calc(var(--fan-y) + var(--pull-y))) scale(1.08);
+}
+
+[data-pp-fan] [data-pp-fan-item][aria-selected="true"]:not(:hover),
+[data-pp-fan] [data-pp-fan-item][class*="rowActive"]:not(:hover) {
+  background: var(--dsw-alias-bg-layer-2);
 }
 
 [data-pp-fan] *:not([data-pp-fan-item]):not(:has([data-pp-fan-item])):not([data-pp-fan-item] *) {

@@ -31,11 +31,17 @@ window.__ModuleLoader__.load({
     }
 
     function shapeFan() {
-      const list = [...document.querySelectorAll('[role="listbox"], [role="menu"]')]
-        .find((element) => element.querySelector(FAN_ROW) !== null)
+      const candidates = [...document.querySelectorAll('[role="listbox"], [role="menu"]')]
+        .filter((element) => element.querySelector('[role="option"]') !== null)
+      const list = candidates.find((element) => !candidates.some((other) => other !== element && element.contains(other)))
       if (list === undefined) {
-        clearFan()
-        missing = false
+        const foreign = [...document.querySelectorAll('[role="listbox"], [role="menu"]')]
+          .some((element) => element.querySelector(FAN_ROW) !== null)
+        if (foreign) miss('dsh-plus-plus: command fan rows are not options')
+        else {
+          clearFan()
+          missing = false
+        }
         return
       }
       const trigger = document.querySelector(FAN_TRIGGER)
@@ -43,8 +49,7 @@ window.__ModuleLoader__.load({
         miss('dsh-plus-plus: command fan trigger not found')
         return
       }
-      const owned = list.getAttribute('role') === 'listbox' || trigger.getAttribute('aria-expanded') === 'true'
-      if (!owned) {
+      if (list.getAttribute('role') !== 'listbox' && trigger.getAttribute('aria-expanded') !== 'true') {
         clearFan()
         missing = false
         return
