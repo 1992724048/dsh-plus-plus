@@ -48,7 +48,62 @@ window.__ModuleLoader__.load({
   background: var(--dsw-alias-brand-primary);
   border-radius: 50%; corner-shape: round;
 }
+[class*="_frame"]:not([data-sidebar-collapsed]) [class*="_footArea"] {
+  flex-direction: row;
+  align-items: center;
+}
+[class*="_frame"]:not([data-sidebar-collapsed]) [class*="_settingsArea"] {
+  width: auto;
+}
+[class*="_frame"]:not([data-sidebar-collapsed]) [class*="_footerActions"] {
+  width: auto;
+  margin-left: auto;
+  gap: 6px;
+}
+.pp-settings {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pp-settings:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
 `.trim()
+
+    function SettingsShortcut({ t }) {
+      const label = t('nav')
+      const open = () => {
+        const trigger = document.querySelector('[class*="_settingsArea"] button[aria-haspopup="dialog"]')
+        trigger?.click()
+        const pick = (tries) => {
+          const own = document.querySelector('.pp-settings')
+          const item = [...document.querySelectorAll('button, [role="tab"], a')].find((el) => (
+            el !== own
+            && el.textContent?.trim() === label
+            && el.closest('[class*="_footArea"]') === null
+          ))
+          if (item !== undefined) {
+            item.click()
+            return
+          }
+          if (tries > 0) window.setTimeout(() => pick(tries - 1), 120)
+        }
+        window.setTimeout(() => pick(6), 240)
+      }
+      return h('button', {
+        type: 'button',
+        className: 'pp-settings',
+        'aria-label': label,
+        onClick: open,
+      }, label)
+    }
 
     function SettingsPage({ t, listFeatures }) {
       const features = listFeatures().filter(feature => typeof feature.settings === 'function')
@@ -114,6 +169,13 @@ window.__ModuleLoader__.load({
         label: () => t('nav'),
         locale: 'settings.plusPlus',
       }, () => h(SettingsPage, { t, listFeatures })))
+
+      ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+        name: 'sidebar.footer.action',
+        id: 'dsh-plus-plus',
+        order: 10,
+        locale: 'settings.plusPlus',
+      }, SettingsShortcut))
     }
 
     exports.apply = apply
