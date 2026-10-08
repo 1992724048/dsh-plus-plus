@@ -73,7 +73,7 @@ window.__ModuleLoader__.load({
       rows.forEach((row) => {
         if (!row.hasAttribute('data-pp-fan-item')) row.setAttribute('data-pp-fan-item', '')
       })
-      const radius = Math.max(40, Math.min(240, (rows.length * 40) / Math.PI))
+      const radius = Math.max(36, Math.min(200, (rows.length * 36) / Math.PI))
       const rect = trigger.getBoundingClientRect()
       const cx = rect.left + rect.width / 2
       const cy = rect.top - 12
