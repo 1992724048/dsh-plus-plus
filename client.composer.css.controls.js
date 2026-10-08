@@ -68,9 +68,9 @@ window.__ModuleLoader__.load({
 [data-pp-fan] [data-pp-fan-item]:hover,
 [data-pp-fan] [data-pp-fan-item][aria-selected="true"] {
   transform: translate(-50%, -50%) scale(1.08);
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-  outline: 2px solid var(--pp-composer-accent-hover);
-  outline-offset: 2px;
+  background: var(--pp-composer-accent-hover);
+  color: var(--pp-composer-accent-hover-ink);
+  outline: none;
 }
 
 [data-pp-fan] *:not([data-pp-fan-item]):not(:has([data-pp-fan-item])):not([data-pp-fan-item] *) {

@@ -7,6 +7,7 @@ window.__ModuleLoader__.load({
     const FAN_ROW = '[role="option"], [role="menuitem"], [role="menuitemradio"]'
 
     let missing = false
+    let queued = false
 
     function miss(message) {
       if (missing) return
@@ -20,8 +21,10 @@ window.__ModuleLoader__.load({
       })
       document.querySelectorAll('[data-pp-fan-item]').forEach((row) => {
         row.removeAttribute('data-pp-fan-item')
+        row.removeAttribute('data-pp-fan-start')
         row.style.left = ''
         row.style.top = ''
+        row.style.transform = ''
       })
     }
 
@@ -54,18 +57,19 @@ window.__ModuleLoader__.load({
         panel = panel.parentElement
       }
       if (panel === null || panel === document.body || panel.matches('[data-composer-card]')) panel = list
-      list.setAttribute('data-pp-fan', '')
-      if (panel !== list) panel.setAttribute('data-pp-fan', '')
+      if (!list.hasAttribute('data-pp-fan')) list.setAttribute('data-pp-fan', '')
+      if (panel !== list && !panel.hasAttribute('data-pp-fan')) panel.setAttribute('data-pp-fan', '')
       const rows = [...list.querySelectorAll(FAN_ROW)]
       if (rows.length === 0) {
         miss('dsh-plus-plus: command fan found no menu rows')
         return
       }
       missing = false
-      rows.forEach((row) => row.setAttribute('data-pp-fan-item', ''))
+      rows.forEach((row) => {
+        if (!row.hasAttribute('data-pp-fan-item')) row.setAttribute('data-pp-fan-item', '')
+      })
       const widest = rows.reduce((max, row) => Math.max(max, row.getBoundingClientRect().width), 0)
-      const needed = (rows.length * (widest + 14)) / Math.PI
-      const radius = Math.max(96, Math.min(320, Math.max(44 + rows.length * 12, needed)))
+      const radius = Math.max(64, Math.min(240, (rows.length * (widest + 8)) / Math.PI))
       const rect = trigger.getBoundingClientRect()
       const cx = rect.left + rect.width / 2
       const cy = rect.top - 12
@@ -73,10 +77,30 @@ window.__ModuleLoader__.load({
         const angle = rows.length === 1
           ? Math.PI / 2
           : Math.PI - (Math.PI * index) / (rows.length - 1)
-        row.style.left = `${Math.round(cx + Math.cos(angle) * radius)}px`
-        row.style.top = `${Math.round(cy - Math.sin(angle) * radius)}px`
+        const left = `${Math.round(cx + Math.cos(angle) * radius)}px`
+        const top = `${Math.round(cy - Math.sin(angle) * radius)}px`
+        if (row.style.left !== left) row.style.left = left
+        if (row.style.top !== top) row.style.top = top
+        if (!row.hasAttribute('data-pp-fan-start')) {
+          row.setAttribute('data-pp-fan-start', '')
+          const x = Number.parseFloat(left)
+          const y = Number.parseFloat(top)
+          row.style.transform = `translate(-50%, -50%) translate(${Math.round(cx - x)}px, ${Math.round(cy - y)}px) scale(0.4)`
+          requestAnimationFrame(() => {
+            row.style.transform = ''
+          })
+        }
         const name = (row.textContent ?? '').trim()
-        if (name !== '') row.setAttribute('title', name)
+        if (name !== '' && row.getAttribute('title') !== name) row.setAttribute('title', name)
+      })
+    }
+
+    function run() {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => {
+        queued = false
+        shapeFan()
       })
     }
 
@@ -84,8 +108,11 @@ window.__ModuleLoader__.load({
       console.debug('dsh-plus-plus: command fan armed')
       ctx.effect(() => {
         shapeFan()
+        const observer = new MutationObserver(run)
+        observer.observe(document.body, { childList: true, subtree: true })
         const poll = setInterval(shapeFan, 150)
         return () => {
+          observer.disconnect()
           clearInterval(poll)
           clearFan()
         }
