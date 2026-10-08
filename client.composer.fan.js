@@ -3,7 +3,7 @@ window.__ModuleLoader__.load({
   factory: () => {
     const module = { exports: {} }
 
-    const FAN_TRIGGER = '[aria-haspopup="listbox"][aria-expanded="true"]'
+    const FAN_TRIGGER = '[data-composer-card] button[aria-haspopup="listbox"]'
     const FAN_ROW = '[role="option"], [role="menuitem"], [role="menuitemradio"]'
 
     let missing = false
@@ -26,16 +26,22 @@ window.__ModuleLoader__.load({
     }
 
     function shapeFan() {
-      const trigger = document.querySelector(FAN_TRIGGER)
-      if (trigger === null) {
+      const list = [...document.querySelectorAll('[role="listbox"], [role="menu"]')]
+        .find((element) => element.querySelector(FAN_ROW) !== null)
+      if (list === undefined) {
         clearFan()
         missing = false
         return
       }
-      const list = [...document.querySelectorAll('[role="listbox"], [role="menu"]')]
-        .find((element) => element.querySelector(FAN_ROW) !== null)
-      if (list === undefined) {
-        miss('dsh-plus-plus: command fan found no menu container')
+      const trigger = document.querySelector(FAN_TRIGGER)
+      if (trigger === null) {
+        miss('dsh-plus-plus: command fan trigger not found')
+        return
+      }
+      const owned = list.getAttribute('role') === 'listbox' || trigger.getAttribute('aria-expanded') === 'true'
+      if (!owned) {
+        clearFan()
+        missing = false
         return
       }
       let panel = list
@@ -73,6 +79,7 @@ window.__ModuleLoader__.load({
     }
 
     function install(ctx) {
+      console.debug('dsh-plus-plus: command fan armed')
       ctx.effect(() => {
         shapeFan()
         const poll = setInterval(shapeFan, 150)
