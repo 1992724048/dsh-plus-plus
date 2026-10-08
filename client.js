@@ -59,6 +59,7 @@ window.__ModuleLoader__.load({
 [class*="_frame"]:not([data-sidebar-collapsed]) [class*="_footerActions"] {
   width: auto;
   margin-left: auto;
+  order: 2;
   gap: 6px;
 }
 .pp-settings {

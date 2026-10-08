@@ -81,8 +81,8 @@ window.__ModuleLoader__.load({
       { index: 4, words: ['高', 'high'] },
       { index: 3, words: ['中', '中等', 'medium', 'mid'] },
       { index: 2, words: ['低', 'low'] },
-      { index: 1, words: ['默认', 'default', '供应商默认', 'provider default'] },
-      { index: 0, words: ['关闭', '禁用', '无', 'none', 'off', 'disable'] },
+      { index: 1, words: ['关闭', '禁用', '无', 'none', 'off', 'disable'] },
+      { index: 0, words: ['默认', 'default', '供应商默认', 'provider default'] },
     ]
 
     function effortLevel(text) {
