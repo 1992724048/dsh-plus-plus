@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
       '--pp-composer-attachment-ink': { light: '#fff', dark: '#fff' },
       '--pp-composer-stop': { light: '#F56C6C', dark: '#F56C6C' },
       '--pp-composer-stop-ink': { light: '#fff', dark: '#fff' },
-      '--pp-composer-disabled': { light: '#C0C4CC', dark: '#545A63' },
+      '--pp-composer-disabled': { light: '#C0C4CC', dark: '#3F434B' },
       '--pp-composer-disabled-ink': { light: '#787D86', dark: '#AEB3BB' },
     }
 
