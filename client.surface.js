@@ -100,7 +100,7 @@ html [class*="composerSeat"] {
   z-index: 9 !important;
 }
 
-html [data-conversation-region] [class*="_root"]:has(> [aria-haspopup="dialog"]) {
+html [data-conversation-region] [data-composer-card] ~ [class*="_dock"] {
   position: fixed;
   top: calc(var(--dsh-frame-top-clearance, 0px) + var(--pp-header-height, 76px));
   right: 28px;

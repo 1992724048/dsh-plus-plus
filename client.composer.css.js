@@ -106,8 +106,8 @@ window.__ModuleLoader__.load({
 }
 
 [data-composer-card] :is(button, [role="button"]):focus-visible {
-  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: -2px;
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #2563EB));
+  outline-offset: 2px;
 }
 
 [data-composer-card] [class*="_modes"] button,

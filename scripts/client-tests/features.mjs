@@ -540,8 +540,10 @@ test('the permission button is borderless and coloured by its mode', async () =>
   // how the button ended up looking focus-transparent.
   const focus = /\[data-composer-card\] :is\(button, \[role="button"\]\):focus-visible\s*\{([^}]*)\}/.exec(css)
   assert.ok(focus, 'one shared focus rule must cover every composer button')
-  assert.match(focus[1], /outline:\s*2px solid var\(--dsw-focus-ring-color, var\(--dsw-alias-state-business-primary\)\)/,
-    'the host ring colour with a literal width, so it always renders')
+  assert.match(focus[1], /outline:\s*2px solid var\(--dsw-focus-ring-color, var\(--dsw-alias-state-business-primary, #2563EB\)\)/,
+    'the host ring colour, with a literal last resort — the ring vars exist nowhere, so an unguarded chain renders nothing')
+  assert.match(focus[1], /outline-offset:\s*2px(?!\d)/,
+    'outside the button: the mode fills are the same family of colour as the ring, and an inside ring vanished into them')
   assert.doesNotMatch(focus[1], /background:/,
     'and it must not repaint the mode fill under focus')
   assert.doesNotMatch(css, /\[data-slot="conversation\.input\.permission"\] button:focus-visible/,
@@ -1199,14 +1201,16 @@ test('the session side panel floats over the thread instead of squeezing it', as
   assert.match(seat[1], /z-index:\s*9 !important/,
     'the host pins it at 7 with triple-class specificity — above the header, below the panel')
 
-  const meter = /html \[data-conversation-region\] \[class\*="_root"\]:has\(> \[aria-haspopup="dialog"\]\)\s*\{([^}]*)\}/.exec(css)
-  assert.ok(meter, 'the context meter must be relocated')
-  assert.match(meter[1], /position:\s*fixed(?![\w-])/,
-    'fixed escapes the composer stack and lands it in the bar')
-  assert.match(meter[1], /top:\s*calc\(var\(--dsh-frame-top-clearance, 0px\) \+ var\(--pp-header-height, 76px\)\)/,
+  const dock = /html \[data-conversation-region\] \[data-composer-card\] ~ \[class\*="_dock"\]\s*\{([^}]*)\}/.exec(css)
+  assert.ok(dock, 'the stats dock must be relocated')
+  assert.match(dock[1], /position:\s*fixed(?![\w-])/,
+    'the dock carries both the stats pills and the context meter — fixed escapes the composer stack in one move')
+  assert.match(dock[1], /top:\s*calc\(var\(--dsh-frame-top-clearance, 0px\) \+ var\(--pp-header-height, 76px\)\)/,
     'anchored to the measured bottom edge of the bar')
-  assert.match(meter[1], /transform:\s*translateY\(-100%\)/,
+  assert.match(dock[1], /transform:\s*translateY\(-100%\)/,
     'parked above that line = on the tabs row, right side')
+  assert.doesNotMatch(css, /aria-haspopup="dialog"/,
+    'the meter rule is gone — one dock rule moves both, or they would stack on the same anchor')
 
   const media = /@media \(prefers-reduced-motion: no-preference\)\s*\{([\s\S]*?)\n\}/.exec(css)
   assert.ok(media, 'the transitions must sit behind the reduced-motion guard')
