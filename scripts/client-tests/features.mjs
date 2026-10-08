@@ -534,20 +534,32 @@ test('the permission button is borderless and coloured by its mode', async () =>
       token + ' is a mode colour, not a theme colour — it must not invert')
   }
 
-  // Focus is one shared ring across every composer button — that IS the sync the
-  // user asked for. The width is a literal: the host's --dsh-focus-ring-width was
-  // not resolvable here, and an invalid outline renders nothing at all, which is
-  // how the button ended up looking focus-transparent.
-  const focus = /\[data-composer-card\] :is\(button, \[role="button"\]\):focus-visible\s*\{([^}]*)\}/.exec(css)
+  // Focus is one shared rule across every composer button — that IS the sync the
+  // user asked for. It keys on :focus with a palette colour: the host's focus-ring
+  // vars exist nowhere in the install, and :focus-visible kept leaving the
+  // permission button looking focus-transparent.
+  const focus = /\[data-composer-card\] :is\(button, \[role="button"\]\):focus\s*\{([^}]*)\}/.exec(css)
   assert.ok(focus, 'one shared focus rule must cover every composer button')
-  assert.match(focus[1], /outline:\s*2px solid var\(--dsw-focus-ring-color, var\(--dsw-alias-state-business-primary, #2563EB\)\)/,
-    'the host ring colour, with a literal last resort — the ring vars exist nowhere, so an unguarded chain renders nothing')
+  assert.match(focus[1], /outline:\s*2px solid var\(--pp-composer-focus\)/,
+    'a palette colour — no host var chain can compute to nothing')
   assert.match(focus[1], /outline-offset:\s*2px(?!\d)/,
-    'outside the button: the mode fills are the same family of colour as the ring, and an inside ring vanished into them')
+    'outside the button: a ring drawn inside the mode fill blends into it')
   assert.doesNotMatch(focus[1], /background:/,
     'and it must not repaint the mode fill under focus')
-  assert.doesNotMatch(css, /\[data-slot="conversation\.input\.permission"\] button:focus-visible/,
+  assert.doesNotMatch(css, /\[data-slot="conversation\.input\.permission"\] button:focus/,
     'the permission button keeps no private focus rule — one rule is what syncs it to the attach button')
+
+  const disabled = /\[class\*="_trailing"\] > button:last-of-type:disabled\s*\{([^}]*)\}/.exec(css)
+  assert.ok(disabled, 'the send button needs its own disabled state')
+  assert.match(disabled[1], /background:\s*var\(--pp-composer-disabled\)/,
+    'grey from the palette — opacity alone read as transparent')
+  assert.doesNotMatch(disabled[1], /opacity:\s*\.4/, 'and the ghosting opacity must be gone')
+
+  const dockButton = /\[data-composer-card\] ~ \[class\*="_dock"\] :is\(button, \[role="button"\]\)\s*\{([^}]*)\}/.exec(css)
+  assert.ok(dockButton, 'the dock buttons must be addressed')
+  assert.match(dockButton[1], /background:\s*transparent/, 'the moved dock sheds its box')
+  assert.match(dockButton[1], /border:\s*0(?![\w-])/, 'border gone')
+  assert.doesNotMatch(dockButton[1], /outline/, 'but the focus ring stays — that was the explicit exception')
 
   const chevron = /\[data-slot="conversation\.input\.permission"\] \[class\*="_chevron"\]\s*\{([^}]*)\}/.exec(css)
   assert.ok(chevron, 'the permission chevron needs its own rule')
@@ -1207,8 +1219,8 @@ test('the session side panel floats over the thread instead of squeezing it', as
     'the dock carries both the stats pills and the context meter — fixed escapes the composer stack in one move')
   assert.match(dock[1], /top:\s*calc\(var\(--dsh-frame-top-clearance, 0px\) \+ var\(--pp-header-height, 76px\)\)/,
     'anchored to the measured bottom edge of the bar')
-  assert.match(dock[1], /transform:\s*translateY\(-100%\)/,
-    'parked above that line = on the tabs row, right side')
+  assert.match(dock[1], /transform:\s*translateY\(calc\(-100% - 7px\)\)/,
+    'the tabs keep 9px of padding under a 16px line, so the text centre sits 17px up while a 20px pill sits 10px up — 7px puts them on one baseline')
   assert.doesNotMatch(css, /aria-haspopup="dialog"/,
     'the meter rule is gone — one dock rule moves both, or they would stack on the same anchor')
 

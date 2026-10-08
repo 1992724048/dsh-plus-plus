@@ -27,6 +27,9 @@ window.__ModuleLoader__.load({
       '--pp-composer-hover': { light: 'rgb(255 255 255 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
       '--pp-composer-attachment': { light: '#F56C6C', dark: '#F56C6C' },
       '--pp-composer-attachment-ink': { light: '#fff', dark: '#fff' },
+      '--pp-composer-focus': { light: '#2563EB', dark: '#60a5fa' },
+      '--pp-composer-disabled': { light: 'rgb(0 0 0 / 8%)', dark: 'rgb(255 255 255 / 10%)' },
+      '--pp-composer-disabled-ink': { light: 'rgb(0 0 0 / 30%)', dark: 'rgb(255 255 255 / 30%)' },
     }
 
     const SEAT_CSS = `
@@ -105,8 +108,8 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-hover);
 }
 
-[data-composer-card] :is(button, [role="button"]):focus-visible {
-  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #2563EB));
+[data-composer-card] :is(button, [role="button"]):focus {
+  outline: 2px solid var(--pp-composer-focus);
   outline-offset: 2px;
 }
 
@@ -238,7 +241,9 @@ window.__ModuleLoader__.load({
 }
 
 [data-composer-card] [class*="_trailing"] > button:last-of-type:disabled {
-  opacity: .4;
+  background: var(--pp-composer-disabled);
+  color: var(--pp-composer-disabled-ink);
+  opacity: 1;
 }
 
 [data-composer-card] > [data-slot="conversation.input.attachments"],
@@ -263,10 +268,10 @@ html [data-conversation-region] [class*="_dock"]:not([data-composer-card] ~ *) {
 }
 
 [data-composer-card] ~ [class*="_dock"] :is(button, [role="button"]) {
-  border: 1px solid var(--pp-composer-stroke);
+  border: 0;
   border-radius: 0;
   box-shadow: none;
-  background: var(--pp-composer-control);
+  background: transparent;
   transform: none;
 }
 

@@ -104,7 +104,7 @@ html [data-conversation-region] [data-composer-card] ~ [class*="_dock"] {
   position: fixed;
   top: calc(var(--dsh-frame-top-clearance, 0px) + var(--pp-header-height, 76px));
   right: 28px;
-  transform: translateY(-100%);
+  transform: translateY(calc(-100% - 7px));
 }
 
 html[data-windows-titlebar] [class*="_frame"]:not([data-rightbar-collapsed]) {
