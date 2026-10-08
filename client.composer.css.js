@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     const module = { exports: {} }
 
     const PALETTE = {
-      '--pp-composer-surface': { light: 'rgb(255 255 255 / 50%)', dark: 'rgb(255 255 255 / 50%)' },
+      '--pp-composer-surface': { light: 'rgb(255 255 255 / 50%)', dark: '#000' },
       '--pp-composer-blur': { light: '16px', dark: '16px' },
       '--pp-composer-placeholder-ink': { light: 'rgb(0 0 0 / 62%)', dark: 'rgb(255 255 255 / 78%)' },
       '--pp-composer-permission-readonly': { light: '#67C23A', dark: '#67C23A' },
@@ -16,9 +16,11 @@ window.__ModuleLoader__.load({
       '--pp-composer-permission-full': { light: '#E6A23C', dark: '#E6A23C' },
       '--pp-composer-permission-full-ink': { light: '#000', dark: '#000' },
       '--pp-composer-permission-full-hover': { light: '#EBB563', dark: '#EBB563' },
-      '--pp-composer-trigger': { light: '#fff', dark: '#fff' },
-      '--pp-composer-trigger-ink': { light: '#000', dark: '#000' },
+      '--pp-composer-trigger': { light: '#fff', dark: '#000' },
+      '--pp-composer-trigger-ink': { light: '#000', dark: '#fff' },
       '--pp-composer-trigger-hover': { light: 'rgb(255 255 255 / 14%)', dark: 'rgb(255 255 255 / 14%)' },
+      '--pp-composer-tool': { light: '#fff', dark: '#000' },
+      '--pp-composer-tool-ink': { light: '#000', dark: '#fff' },
       '--pp-composer-accent': { light: '#fff', dark: '#fff' },
       '--pp-composer-accent-ink': { light: '#000', dark: '#000' },
       '--pp-composer-accent-hover': { light: '#ffee22', dark: '#ffee22' },
@@ -222,9 +224,9 @@ window.__ModuleLoader__.load({
 
 [data-composer-card] button[aria-haspopup="listbox"],
 [data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type {
-  background: var(--pp-composer-accent);
+  background: var(--pp-composer-tool);
   border: 0;
-  color: var(--pp-composer-accent-ink);
+  color: var(--pp-composer-tool-ink);
   transition: background-color var(--pp-composer-accent-transition) ease,
               color var(--pp-composer-accent-transition) ease;
 }

@@ -31,6 +31,7 @@ window.__ModuleLoader__.load({
         light: 'url("/api/dsh-plus-plus/assets/bk.jpg")',
         dark: 'url("/api/dsh-plus-plus/assets/bg.jpg")',
       },
+      '--pp-surface-veil': { light: 'rgb(0 0 0 / 0%)', dark: 'rgb(0 0 0 / 15%)' },
       '--pp-surface-article-card': {
         light: 'rgb(255 255 255 / 85%)',
         dark: 'rgb(255 255 255 / 12%)',
@@ -68,7 +69,7 @@ html [class*="_root"]:has([data-conversation-region="chat"]) {
 }
 
 [data-conversation-region="chat"] {
-  background-image: var(--pp-surface-chat-image);
+  background-image: linear-gradient(var(--pp-surface-veil), var(--pp-surface-veil)), var(--pp-surface-chat-image);
   background-attachment: fixed;
   background-size: cover;
   background-position: center;
