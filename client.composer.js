@@ -18,6 +18,45 @@ window.__ModuleLoader__.load({
 
     const MODEL_SLOT = '[data-slot="conversation.input.model"]'
 
+    const FAN_TRIGGER = '[data-composer-card] button[aria-haspopup="listbox"]'
+
+    function shapeFan() {
+      const trigger = document.querySelector(`${FAN_TRIGGER}[aria-expanded="true"]`)
+      if (trigger === null) {
+        document.querySelectorAll('[data-pp-fan]').forEach((panel) => {
+          panel.removeAttribute('data-pp-fan')
+          panel.querySelectorAll('[role="option"]').forEach((option) => {
+            option.style.left = ''
+            option.style.top = ''
+          })
+        })
+        return
+      }
+      const list = document.querySelector('[role="listbox"]')
+      if (list === null) return
+      let panel = list
+      while (panel !== document.body && panel !== null && getComputedStyle(panel).position !== 'fixed') {
+        panel = panel.parentElement
+      }
+      if (panel === null || panel === document.body) return
+      panel.setAttribute('data-pp-fan', '')
+      const options = [...list.querySelectorAll('[role="option"]')]
+      if (options.length === 0) return
+      const rect = trigger.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top - 12
+      const radius = Math.max(88, Math.min(168, 44 + options.length * 12))
+      options.forEach((option, index) => {
+        const angle = options.length === 1
+          ? Math.PI / 2
+          : Math.PI - (Math.PI * index) / (options.length - 1)
+        option.style.left = `${Math.round(cx + Math.cos(angle) * radius)}px`
+        option.style.top = `${Math.round(cy - Math.sin(angle) * radius)}px`
+        const name = (option.textContent ?? '').trim()
+        if (name !== '') option.setAttribute('title', name)
+      })
+    }
+
     const PERMISSION_MODES = [
       { mode: 'readonly', match: '仅可查看' },
       { mode: 'readonly', match: '仅可' },
@@ -175,6 +214,12 @@ window.__ModuleLoader__.load({
             if (typeof watching === 'function') watching()
           }
         }, 'dsh-plus-plus: effort badge')
+
+        ctx.effect(() => {
+          shapeFan()
+          const poll = setInterval(shapeFan, 150)
+          return () => clearInterval(poll)
+        }, 'dsh-plus-plus: command fan')
 
         ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
           name: 'conversation.input.left',

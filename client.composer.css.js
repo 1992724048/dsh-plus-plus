@@ -149,6 +149,42 @@ window.__ModuleLoader__.load({
   outline-offset: 2px;
 }
 
+[data-composer-card] button[aria-haspopup="listbox"][aria-expanded="true"] {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #2563EB));
+  outline-offset: 2px;
+}
+
+[data-pp-fan] {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-pp-fan] [class*="_material"] {
+  display: none !important;
+}
+
+[data-pp-fan] [role="option"] {
+  position: fixed !important;
+  min-width: max-content;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  transition: transform .14s ease;
+}
+
+[data-pp-fan] [role="option"]:hover,
+[data-pp-fan] [role="option"][aria-selected="true"] {
+  transform: translate(-50%, -50%) scale(1.08);
+  outline: 2px solid var(--pp-composer-accent-hover);
+  outline-offset: 2px;
+}
+
+[data-pp-fan] [role="listbox"] *:not([role="option"]):not(:has([role="option"])):not([role="option"] *) {
+  display: none !important;
+}
+
 [data-composer-card] [class*="_modes"] button,
 [data-composer-card] [data-slot="conversation.input.model"] button {
   height: var(--pp-composer-control-size);
