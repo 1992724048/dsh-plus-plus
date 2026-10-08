@@ -29,8 +29,8 @@ window.__ModuleLoader__.load({
       '--pp-composer-hover': { light: 'rgb(255 255 255 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
       '--pp-composer-attachment': { light: '#F56C6C', dark: '#F56C6C' },
       '--pp-composer-attachment-ink': { light: '#fff', dark: '#fff' },
-      '--pp-composer-disabled': { light: 'rgb(0 0 0 / 8%)', dark: 'rgb(255 255 255 / 10%)' },
-      '--pp-composer-disabled-ink': { light: 'rgb(0 0 0 / 30%)', dark: 'rgb(255 255 255 / 30%)' },
+      '--pp-composer-disabled': { light: '#C0C4CC', dark: '#545A63' },
+      '--pp-composer-disabled-ink': { light: 'rgb(0 0 0 / 40%)', dark: 'rgb(255 255 255 / 45%)' },
     }
 
     const SEAT_CSS = `
