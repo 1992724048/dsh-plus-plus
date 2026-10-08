@@ -29,8 +29,10 @@ window.__ModuleLoader__.load({
       '--pp-composer-hover': { light: 'rgb(255 255 255 / 8%)', dark: 'rgb(255 255 255 / 8%)' },
       '--pp-composer-attachment': { light: '#F56C6C', dark: '#F56C6C' },
       '--pp-composer-attachment-ink': { light: '#fff', dark: '#fff' },
+      '--pp-composer-stop': { light: '#F56C6C', dark: '#F56C6C' },
+      '--pp-composer-stop-ink': { light: '#fff', dark: '#fff' },
       '--pp-composer-disabled': { light: '#C0C4CC', dark: '#545A63' },
-      '--pp-composer-disabled-ink': { light: 'rgb(0 0 0 / 40%)', dark: 'rgb(255 255 255 / 45%)' },
+      '--pp-composer-disabled-ink': { light: '#787D86', dark: '#AEB3BB' },
     }
 
     const SEAT_CSS = `
@@ -252,6 +254,13 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-disabled);
   color: var(--pp-composer-disabled-ink);
   opacity: 1;
+}
+
+[data-composer-card] [class*="_trailing"] > button:has(> svg rect):not(:disabled),
+[data-composer-card] [class*="_trailing"] > button:has(> svg rect):hover:not(:disabled),
+[data-composer-card] [class*="_trailing"] > button:last-of-type:has(> svg rect):hover:not(:disabled) {
+  background: var(--pp-composer-stop);
+  color: var(--pp-composer-stop-ink);
 }
 
 [data-composer-card] > [data-slot="conversation.input.attachments"],
