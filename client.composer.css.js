@@ -21,6 +21,14 @@ window.__ModuleLoader__.load({
       '--pp-composer-trigger-hover': { light: 'rgb(255 255 255 / 14%)', dark: 'rgb(255 255 255 / 14%)' },
       '--pp-composer-tool': { light: '#fff', dark: '#000' },
       '--pp-composer-tool-ink': { light: '#000', dark: '#fff' },
+      '--pp-composer-effort-off': { light: '#C0C4CC', dark: '#545A63' },
+      '--pp-composer-effort-off-ink': { light: '#4A4F57', dark: '#D5D9E0' },
+      '--pp-composer-effort-low': { light: '#67C23A', dark: '#67C23A' },
+      '--pp-composer-effort-medium': { light: '#409EFF', dark: '#409EFF' },
+      '--pp-composer-effort-high': { light: '#E6A23C', dark: '#E6A23C' },
+      '--pp-composer-effort-max': { light: '#F56C6C', dark: '#F56C6C' },
+      '--pp-composer-effort-ink': { light: '#000', dark: '#000' },
+      '--pp-composer-effort-max-ink': { light: '#fff', dark: '#fff' },
       '--pp-composer-accent': { light: '#fff', dark: '#000' },
       '--pp-composer-accent-ink': { light: '#000', dark: '#fff' },
       '--pp-composer-accent-hover': { light: '#ffee22', dark: '#ffee22' },
@@ -167,6 +175,37 @@ window.__ModuleLoader__.load({
 
 [data-composer-card] [data-slot="conversation.input.model"] [class*="triggerIcon"] {
   display: none !important;
+}
+
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"] {
+  border-radius: 0;
+  flex-shrink: 0;
+  padding: 0 5px;
+  line-height: 18px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--pp-composer-effort-off);
+  color: var(--pp-composer-effort-off-ink);
+}
+
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"][data-pp-effort="low"] {
+  background: var(--pp-composer-effort-low);
+  color: var(--pp-composer-effort-ink);
+}
+
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"][data-pp-effort="medium"] {
+  background: var(--pp-composer-effort-medium);
+  color: var(--pp-composer-effort-ink);
+}
+
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"][data-pp-effort="high"] {
+  background: var(--pp-composer-effort-high);
+  color: var(--pp-composer-effort-ink);
+}
+
+[data-composer-card] [data-slot="conversation.input.model"] [class*="triggerEffort"][data-pp-effort="max"] {
+  background: var(--pp-composer-effort-max);
+  color: var(--pp-composer-effort-max-ink);
 }
 
 [data-composer-card] [class*="_modes"] button:hover:not(:disabled) {
