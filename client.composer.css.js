@@ -9,11 +9,13 @@ window.__ModuleLoader__.load({
       '--pp-composer-placeholder-ink': { light: 'rgb(0 0 0 / 62%)', dark: 'rgb(255 255 255 / 78%)' },
       '--pp-composer-permission-readonly': { light: '#67C23A', dark: '#67C23A' },
       '--pp-composer-permission-readonly-ink': { light: '#000', dark: '#000' },
+      '--pp-composer-permission-readonly-hover': { light: '#85CE61', dark: '#85CE61' },
       '--pp-composer-permission-workspace': { light: '#409EFF', dark: '#409EFF' },
       '--pp-composer-permission-workspace-ink': { light: '#000', dark: '#000' },
+      '--pp-composer-permission-workspace-hover': { light: '#66B1FF', dark: '#66B1FF' },
       '--pp-composer-permission-full': { light: '#E6A23C', dark: '#E6A23C' },
       '--pp-composer-permission-full-ink': { light: '#000', dark: '#000' },
-      '--pp-composer-permission-hover': { light: 'rgb(255 255 255 / 18%)', dark: 'rgb(255 255 255 / 18%)' },
+      '--pp-composer-permission-full-hover': { light: '#EBB563', dark: '#EBB563' },
       '--pp-composer-trigger': { light: '#fff', dark: '#fff' },
       '--pp-composer-trigger-ink': { light: '#000', dark: '#000' },
       '--pp-composer-trigger-hover': { light: 'rgb(255 255 255 / 14%)', dark: 'rgb(255 255 255 / 14%)' },
@@ -152,8 +154,7 @@ window.__ModuleLoader__.load({
 [data-composer-card] [data-slot="conversation.input.permission"] button {
   border: 0;
   transition: background-color var(--pp-composer-accent-transition) ease,
-              color var(--pp-composer-accent-transition) ease,
-              box-shadow var(--pp-composer-accent-transition) ease;
+              color var(--pp-composer-accent-transition) ease;
 }
 
 [data-composer-card] [data-slot="conversation.input.permission"] button[data-pp-mode="readonly"] {
@@ -171,8 +172,16 @@ window.__ModuleLoader__.load({
   color: var(--pp-composer-permission-full-ink);
 }
 
-[data-composer-card] [data-slot="conversation.input.permission"] button:hover:not(:disabled) {
-  box-shadow: inset 0 0 0 999px var(--pp-composer-permission-hover);
+[data-composer-card] [data-slot="conversation.input.permission"] button[data-pp-mode="readonly"]:hover:not(:disabled) {
+  background: var(--pp-composer-permission-readonly-hover);
+}
+
+[data-composer-card] [data-slot="conversation.input.permission"] button[data-pp-mode="workspace"]:hover:not(:disabled) {
+  background: var(--pp-composer-permission-workspace-hover);
+}
+
+[data-composer-card] [data-slot="conversation.input.permission"] button[data-pp-mode="full"]:hover:not(:disabled) {
+  background: var(--pp-composer-permission-full-hover);
 }
 
 [data-composer-card] [data-slot="conversation.input.permission"] [class*="_chevron"] {
