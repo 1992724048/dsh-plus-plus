@@ -23,8 +23,9 @@ window.__ModuleLoader__.load({
 }
 
 [data-composer-card] button[aria-haspopup="listbox"][aria-expanded="true"] {
-  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #2563EB));
-  outline-offset: 2px;
+  transform: scale(0.96);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 [data-pp-fan] {
@@ -71,6 +72,29 @@ window.__ModuleLoader__.load({
   }
 }
 
+[data-pp-fan-ghost] {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+}
+
+@keyframes pp-fan-close {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(calc(-1 * var(--fan-x)), calc(-1 * var(--fan-y))) scale(.3);
+  }
+}
+
+[data-pp-fan-ghost] [data-pp-fan-item][data-pp-fan-closing] {
+  transition: none;
+  animation: pp-fan-close .22s cubic-bezier(.2, .8, .3, 1) forwards;
+}
+
 [data-pp-fan] [data-pp-fan-item] > :not(svg):not(:has(svg)) {
   display: none !important;
 }
@@ -103,6 +127,9 @@ window.__ModuleLoader__.load({
   [data-pp-fan] [data-pp-fan-item] {
     animation: none;
     transition: none;
+  }
+  [data-pp-fan-ghost] [data-pp-fan-item][data-pp-fan-closing] {
+    animation: none;
   }
 }
 
