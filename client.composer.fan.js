@@ -62,15 +62,17 @@ window.__ModuleLoader__.load({
         return
       }
       missing = false
+      rows.forEach((row) => row.setAttribute('data-pp-fan-item', ''))
+      const widest = rows.reduce((max, row) => Math.max(max, row.getBoundingClientRect().width), 0)
+      const needed = (rows.length * (widest + 14)) / Math.PI
+      const radius = Math.max(96, Math.min(320, Math.max(44 + rows.length * 12, needed)))
       const rect = trigger.getBoundingClientRect()
       const cx = rect.left + rect.width / 2
       const cy = rect.top - 12
-      const radius = Math.max(88, Math.min(168, 44 + rows.length * 12))
       rows.forEach((row, index) => {
         const angle = rows.length === 1
           ? Math.PI / 2
           : Math.PI - (Math.PI * index) / (rows.length - 1)
-        row.setAttribute('data-pp-fan-item', '')
         row.style.left = `${Math.round(cx + Math.cos(angle) * radius)}px`
         row.style.top = `${Math.round(cy - Math.sin(angle) * radius)}px`
         const name = (row.textContent ?? '').trim()
