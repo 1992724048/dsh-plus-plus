@@ -41,8 +41,8 @@ window.__ModuleLoader__.load({
 
 [data-pp-fan] [data-pp-fan-item] {
   position: fixed !important;
-  width: 44px !important;
-  height: 44px !important;
+  width: 36px !important;
+  height: 36px !important;
   padding: 0 !important;
   display: grid !important;
   place-items: center;
@@ -53,8 +53,6 @@ window.__ModuleLoader__.load({
   overflow: hidden;
   --fan-x: 0px;
   --fan-y: 0px;
-  --pull-x: 0px;
-  --pull-y: 0px;
   transform: translate(-50%, -50%);
   transition: transform .18s ease;
   animation: pp-fan-open .24s cubic-bezier(.2, .8, .3, 1.1);
@@ -86,7 +84,6 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-accent-hover);
   color: var(--pp-composer-accent-hover-ink);
   outline: none;
-  transform: translate(-50%, -50%) translate(var(--pull-x), var(--pull-y)) scale(1.08);
 }
 
 [data-pp-fan] [data-pp-fan-item][aria-selected="true"]:not(:hover),
