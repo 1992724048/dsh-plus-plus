@@ -108,9 +108,13 @@ window.__ModuleLoader__.load({
   background: var(--pp-composer-hover);
 }
 
-[data-composer-card] :is(button, [role="button"]):focus {
+[data-composer-card] :is(button, [role="button"]):focus-visible {
   outline: 2px solid var(--pp-composer-focus);
   outline-offset: 2px;
+}
+
+[data-composer-card] :is(button, [role="button"]):focus:not(:focus-visible) {
+  outline: 0;
 }
 
 [data-composer-card] [class*="_modes"] button,
