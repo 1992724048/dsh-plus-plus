@@ -96,7 +96,7 @@ window.__ModuleLoader__.load({
   order: 1;
 }
 
-[data-composer-card] .pp-attach {
+[data-composer-card] button.pp-attach {
   background: var(--pp-composer-tool);
   border: 0;
   color: var(--pp-composer-tool-ink);
@@ -105,9 +105,11 @@ window.__ModuleLoader__.load({
   padding: 0;
   display: grid;
   place-items: center;
+  transition: background-color var(--pp-composer-accent-transition) ease,
+              color var(--pp-composer-accent-transition) ease;
 }
 
-[data-composer-card] .pp-attach:hover:not(:disabled) {
+[data-composer-card] button.pp-attach:hover:not(:disabled) {
   background: var(--pp-composer-accent-hover);
   color: var(--pp-composer-accent-hover-ink);
 }

@@ -75,7 +75,7 @@ window.__ModuleLoader__.load({
 
     function AttachButton({ t }) {
       const label = t('composer.attach')
-      return h(Tooltip, { label, delayMs: 500 }, h('button', {
+      return h(Tooltip, { label, side: 'top', delayMs: 500 }, h('button', {
         type: 'button',
         className: 'pp-attach',
         'aria-label': label,
