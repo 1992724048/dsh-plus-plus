@@ -66,7 +66,7 @@ window.__ModuleLoader__.load({
   gap: 6px;
 }
 .pp-settings {
-  align-self: stretch;
+  height: 100%;
   aspect-ratio: 1 / 1;
   box-sizing: border-box;
   padding: 0;
@@ -85,77 +85,114 @@ window.__ModuleLoader__.load({
 
     let opening = false
 
+    const VALID_POPUPS = ['menu', 'dialog', 'listbox']
+    const TRIGGER_SELECTORS = [
+      '[class*="_settingsArea"] button[aria-haspopup="menu"]',
+      '[class*="_settingsArea"] button[aria-haspopup="dialog"]',
+      '[class*="_settingsArea"] button[aria-haspopup]',
+      '[class*="_settingsArea"] button',
+    ]
+    const CANDIDATE_SELECTOR = 'button, a, [role="button"], [role="tab"], [role="option"], [role="menuitem"], [role="menuitemradio"]'
+
+    const findTrigger = () => {
+      for (const selector of TRIGGER_SELECTORS) {
+        for (const el of document.querySelectorAll(selector)) {
+          if (el.closest('.pp-settings') !== null) continue
+          const popup = el.getAttribute('aria-haspopup')
+          if (VALID_POPUPS.includes(popup)) return el
+          console.warn(`dsh-plus-plus: settings trigger rejected aria-haspopup=${popup}`)
+        }
+      }
+      return null
+    }
+
+    const isBlockedItem = (el) => el.closest('.pp-settings') !== null
+      || el.closest('.pp-page') !== null
+      || el.closest('input[type="file"], label[for]') !== null
+      || el.getAttribute('role') === 'dialog'
+      || el.getAttribute('aria-modal') === 'true'
+
+    const matchSettingsText = (value) => {
+      const text = (value ?? '').trim()
+      return text === 'Settings'
+        || text === '设置'
+        || text.startsWith('Settings…')
+        || text.startsWith('设置…')
+    }
+
+    const rankPlusPlus = (label, el) => {
+      const text = (el.textContent ?? '').trim()
+      const id = el.id ?? ''
+      const className = el.getAttribute('class') ?? ''
+      const named = el.getAttribute('aria-label') === label || el.getAttribute('title') === label
+      const marked = id.includes('dsh-plus-plus')
+        || id.includes('plusPlus')
+        || id.includes('pp-')
+        || className.includes('dsh-plus-plus')
+        || className.includes('plusPlus')
+        || className.includes('pp-')
+      if (text === label || named || marked) return 0
+      if (text.includes(label)) return 1
+      return -1
+    }
+
+    const rankSettingsItem = (el) => {
+      const id = (el.id ?? '').toLowerCase()
+      const className = (el.getAttribute('class') ?? '').toLowerCase()
+      const named = matchSettingsText(el.getAttribute('aria-label')) || matchSettingsText(el.getAttribute('title'))
+      const marked = id.includes('setting') || className.includes('setting')
+      if (matchSettingsText(el.textContent) || named || marked) return 0
+      return -1
+    }
+
     function SettingsShortcut({ t }) {
       const label = t('nav')
       const open = () => {
         if (opening) return
         opening = true
         console.debug('dsh-plus-plus: settings open called')
-        const triggerSelectors = [
-          '[class*="_settingsArea"] button[aria-haspopup="dialog"]',
-          '[class*="_footArea"] button[aria-haspopup="dialog"]',
-          '[class*="_settingsArea"] [role="button"][aria-haspopup="dialog"]',
-        ]
-        const trigger = triggerSelectors
-          .map((selector) => document.querySelector(selector))
-          .find((el) => el !== null)
-        if (trigger === undefined) {
+        const trigger = findTrigger()
+        if (trigger === null) {
           console.warn('dsh-plus-plus: settings trigger not found')
           opening = false
           return
         }
-        const hasPopup = trigger.getAttribute('aria-haspopup')
-        console.debug(`dsh-plus-plus: settings trigger selected tag=${trigger.tagName} aria-haspopup=${hasPopup}`)
-        if (hasPopup !== 'dialog') {
-          console.warn(`dsh-plus-plus: settings trigger rejected aria-haspopup=${hasPopup}`)
-          opening = false
-          return
-        }
-        if (document.querySelector('[role="dialog"]') === null) {
-          trigger.click()
-          console.debug('dsh-plus-plus: settings trigger click dispatched')
-        }
-        const rankItem = (el) => {
-          if (el.getAttribute('role') === 'dialog' || el.getAttribute('aria-modal') === 'true') return -1
-          const text = (el.textContent ?? '').trim()
-          const id = el.id ?? ''
-          const className = el.getAttribute('class') ?? ''
-          const named = el.getAttribute('aria-label') === label || el.getAttribute('title') === label
-          const marked = id.includes('dsh-plus-plus')
-            || id.includes('plusPlus')
-            || id.includes('pp-')
-            || className.includes('dsh-plus-plus')
-            || className.includes('plusPlus')
-            || className.includes('pp-')
-          if (text === label || named || marked) return 0
-          if (text.includes(label)) return 1
-          return -1
-        }
+        console.debug(`dsh-plus-plus: settings trigger selected tag=${trigger.tagName} aria-haspopup=${trigger.getAttribute('aria-haspopup')}`)
+        trigger.click()
+        console.debug('dsh-plus-plus: settings trigger click dispatched')
+        let settingsClicked = false
         const pick = (tries) => {
-          const own = document.querySelector('.pp-settings')
-          const candidates = [...document.querySelectorAll('button, a, [role="button"], [role="tab"], [role="option"], [role="menuitem"], [role="menuitemradio"]')]
-            .filter((el) => el !== own
-              && el.closest('.pp-settings') === null
-              && el.closest('input[type="file"], label[for]') === null)
-            .map((el) => ({ el, rank: rankItem(el) }))
+          const candidates = [...document.querySelectorAll(CANDIDATE_SELECTOR)]
+            .filter((el) => el !== trigger && !isBlockedItem(el))
+          const rankTop = (ranker) => candidates
+            .map((el) => ({ el, rank: ranker(el) }))
             .filter(({ rank }) => rank >= 0)
             .sort((a, b) => a.rank - b.rank)
-          console.debug(`dsh-plus-plus: settings pick try=${tries} candidates=${candidates.length}`)
-          const hit = candidates[0]
+          const plusPlus = rankTop((el) => rankPlusPlus(label, el))
+          console.debug(`dsh-plus-plus: settings pick try=${tries} candidates=${plusPlus.length}`)
+          const hit = plusPlus[0]
           if (hit !== undefined) {
             console.debug(`dsh-plus-plus: settings pick hit tag=${hit.el.tagName} text=${(hit.el.textContent ?? '').trim()} aria-label=${hit.el.getAttribute('aria-label') ?? ''} id=${hit.el.id}`)
             hit.el.click()
             opening = false
             return
           }
+          if (!settingsClicked) {
+            const settings = rankTop(rankSettingsItem)[0]
+            if (settings !== undefined) {
+              console.debug(`dsh-plus-plus: settings click settings item tag=${settings.el.tagName} text=${(settings.el.textContent ?? '').trim()}`)
+              settings.el.click()
+              settingsClicked = true
+            }
+          }
           if (tries > 0) {
             window.setTimeout(() => pick(tries - 1), 150)
             return
           }
-          console.debug('dsh-plus-plus: settings pick gave up')
+          console.warn('dsh-plus-plus: settings pick gave up')
           opening = false
         }
-        window.setTimeout(() => pick(12), 300)
+        window.setTimeout(() => pick(16), 300)
       }
       return h('button', {
         type: 'button',
