@@ -11,6 +11,7 @@ window.__ModuleLoader__.load({
     const FAN_LIVE = '[data-pp-fan]:not([data-pp-fan-ghost])'
     const FAN_ITEM = '[data-pp-fan-item]'
     const FAN_GHOST = '[data-pp-fan-ghost]'
+    const FAN_OPEN = '[data-pp-fan-open]'
     const FAN_CLOSE_MS = 220
 
     let missing = false
@@ -28,6 +29,9 @@ window.__ModuleLoader__.load({
 
     function clearFan() {
       fanArmed = false
+      document.querySelectorAll(FAN_OPEN).forEach((button) => {
+        button.removeAttribute('data-pp-fan-open')
+      })
       document.querySelectorAll(FAN_LIVE).forEach((panel) => {
         panel.removeAttribute('data-pp-fan')
       })
@@ -40,6 +44,18 @@ window.__ModuleLoader__.load({
         row.style.removeProperty('--pull-x')
         row.style.removeProperty('--pull-y')
       })
+    }
+
+    function markFanOpen(trigger) {
+      document.querySelectorAll(FAN_OPEN).forEach((button) => {
+        if (button !== trigger) button.removeAttribute('data-pp-fan-open')
+      })
+      if (!trigger.hasAttribute('data-pp-fan-open')) trigger.setAttribute('data-pp-fan-open', '')
+    }
+
+    function triggerState(trigger) {
+      if (trigger === null) return 'none'
+      return `connected=${String(trigger.isConnected)} open=${String(trigger.hasAttribute('data-pp-fan-open'))}`
     }
 
     function reducedMotion() {
@@ -130,8 +146,7 @@ window.__ModuleLoader__.load({
         fanTrigger = trigger
         return
       }
-      const triggers = [...document.querySelectorAll(FAN_TRIGGER)]
-      if (triggers.some((item) => item.getAttribute('aria-expanded') === 'true')) return
+      if (document.querySelector(FAN_LIVE) !== null) return
       fanSource = 'other'
       fanTrigger = null
     }
@@ -140,7 +155,6 @@ window.__ModuleLoader__.load({
       const trigger = triggerFromTarget(event.target)
       if (trigger === null) return
       if (trigger !== fanTrigger) return
-      if (trigger.getAttribute('aria-expanded') !== 'true') return
       if (document.querySelector(FAN_LIVE) === null) return
       event.preventDefault()
       event.stopPropagation()
@@ -162,14 +176,13 @@ window.__ModuleLoader__.load({
         return
       }
       const trigger = liveTrigger()
-      console.debug('dsh-plus-plus: shapeFan trigger', fanSource, fanTrigger === null ? 'none' : String(fanTrigger.className), trigger === null ? 'none' : String(trigger.className), trigger === null ? '' : trigger.getAttribute('aria-expanded'))
+      console.debug('dsh-plus-plus: shapeFan trigger', fanSource, fanTrigger === null ? 'none' : String(fanTrigger.className), trigger === null ? 'none' : String(trigger.className), triggerState(trigger))
       if (trigger === null) {
         miss('dsh-plus-plus: command fan trigger not found')
         return
       }
-      const expanded = trigger.getAttribute('aria-expanded')
-      console.debug('dsh-plus-plus: shapeFan gate', fanSource, expanded === null ? 'absent' : expanded)
-      if (fanSource !== 'button' || (expanded !== null && expanded !== 'true')) {
+      console.debug('dsh-plus-plus: shapeFan gate', fanSource, triggerState(fanTrigger), triggerState(trigger))
+      if (fanSource !== 'button') {
         clearFan()
         missing = false
         return
@@ -199,6 +212,7 @@ window.__ModuleLoader__.load({
       }
       missing = false
       fanArmed = true
+      markFanOpen(trigger)
       rows.forEach((row) => {
         if (!row.hasAttribute('data-pp-fan-item')) row.setAttribute('data-pp-fan-item', '')
       })

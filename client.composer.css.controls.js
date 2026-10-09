@@ -22,7 +22,7 @@ window.__ModuleLoader__.load({
   outline-offset: 2px;
 }
 
-[data-composer-card] button[aria-haspopup="listbox"][aria-expanded="true"] {
+[data-composer-card] button[data-pp-fan-open] {
   transform: scale(0.96);
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
