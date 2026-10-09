@@ -49,7 +49,9 @@ window.__ModuleLoader__.load({
   place-items: center;
   border: 0 !important;
   border-radius: 0;
-  background: var(--dsw-alias-bg-layer-2);
+  background: var(--pp-composer-tool) !important;
+  color: var(--pp-composer-tool-ink) !important;
+  --pp-fan-ink: var(--pp-composer-tool-ink);
   box-shadow: 0 2px 8px rgb(0 0 0 / 25%);
   overflow: hidden;
   --fan-x: 0px;
@@ -59,6 +61,18 @@ window.__ModuleLoader__.load({
   transform: translate(-50%, -50%);
   transition: transform .18s ease, background-color .12s ease;
   animation: pp-fan-open .24s cubic-bezier(.2, .8, .3, 1.1);
+}
+
+[data-pp-fan] [data-pp-fan-item] :is(svg, svg *) {
+  color: var(--pp-fan-ink) !important;
+}
+
+[data-pp-fan] [data-pp-fan-item] :is(svg, svg *)[fill]:not([fill="none"]) {
+  fill: var(--pp-fan-ink) !important;
+}
+
+[data-pp-fan] [data-pp-fan-item] :is(svg, svg *)[stroke]:not([stroke="none"]) {
+  stroke: var(--pp-fan-ink) !important;
 }
 
 @keyframes pp-fan-open {
@@ -108,7 +122,8 @@ window.__ModuleLoader__.load({
 [data-pp-fan] [data-pp-fan-item]:hover {
   z-index: 5;
   background: var(--pp-composer-accent-hover, #ffee22) !important;
-  color: var(--pp-composer-accent-hover-ink, #000);
+  color: var(--pp-composer-accent-hover-ink, #000) !important;
+  --pp-fan-ink: var(--pp-composer-accent-hover-ink, #000);
   outline: none;
   transform: translate(-50%, -50%) translate(var(--pull-x), var(--pull-y)) scale(1.12);
   box-shadow: 0 4px 12px rgb(0 0 0 / 35%);
@@ -116,7 +131,9 @@ window.__ModuleLoader__.load({
 
 [data-pp-fan] [data-pp-fan-item][aria-selected="true"]:not(:hover),
 [data-pp-fan] [data-pp-fan-item][class*="rowActive"]:not(:hover) {
-  background: var(--dsw-alias-bg-layer-2);
+  background: var(--dsw-alias-bg-layer-2) !important;
+  color: var(--pp-composer-tool-ink) !important;
+  --pp-fan-ink: var(--pp-composer-tool-ink);
 }
 
 [data-pp-fan] *:not([data-pp-fan-item]):not(:has([data-pp-fan-item])):not([data-pp-fan-item] *) {
