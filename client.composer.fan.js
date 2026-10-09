@@ -12,6 +12,7 @@ window.__ModuleLoader__.load({
     const FAN_ITEM = '[data-pp-fan-item]'
     const FAN_GHOST = '[data-pp-fan-ghost]'
     const FAN_OPEN = '[data-pp-fan-open]'
+    const FAN_HIDDEN = '[data-pp-fan-hidden]'
     const FAN_CLOSE_MS = 220
 
     let missing = false
@@ -20,6 +21,8 @@ window.__ModuleLoader__.load({
     let fanTrigger = null
     let fanArmed = false
     let closing = false
+    let closePending = false
+    let closeTimer = 0
 
     function miss(message) {
       if (missing) return
@@ -151,14 +154,85 @@ window.__ModuleLoader__.load({
       fanTrigger = null
     }
 
+    function escapeEvent(type) {
+      return new KeyboardEvent(type, { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true })
+    }
+
+    function outsideClick(target) {
+      const options = { bubbles: true, cancelable: true, view: window }
+      target.dispatchEvent(new MouseEvent('pointerdown', options))
+      target.dispatchEvent(new MouseEvent('mousedown', options))
+      target.dispatchEvent(new MouseEvent('pointerup', options))
+      target.dispatchEvent(new MouseEvent('mouseup', options))
+      target.dispatchEvent(new MouseEvent('click', options))
+    }
+
+    function revealFan(trigger) {
+      document.querySelectorAll(FAN_HIDDEN).forEach((panel) => {
+        panel.removeAttribute('data-pp-fan-hidden')
+        panel.style.removeProperty('display')
+      })
+      if (trigger !== null && trigger.getAttribute('aria-expanded') !== 'true') trigger.setAttribute('aria-expanded', 'true')
+    }
+
+    function hideFan() {
+      const panels = [...document.querySelectorAll(FAN_LIVE)]
+      if (panels.length === 0) return false
+      const rows = [...document.querySelectorAll(`${FAN_ITEM}:not([data-pp-fan-closing])`)]
+      if (rows.length > 0 && !closing && !reducedMotion()) closeGhost(rows.map((row) => row.cloneNode(true)))
+      const triggers = new Set([...document.querySelectorAll(FAN_OPEN)])
+      if (fanTrigger !== null) triggers.add(fanTrigger)
+      clearFan()
+      panels.forEach((panel) => {
+        panel.setAttribute('data-pp-fan-hidden', '')
+        panel.style.setProperty('display', 'none', 'important')
+      })
+      triggers.forEach((button) => {
+        if (button.isConnected && button.getAttribute('aria-expanded') !== 'false') button.setAttribute('aria-expanded', 'false')
+      })
+      fanTrigger = null
+      fanSource = 'other'
+      return true
+    }
+
+    function closeFanNow(via) {
+      if (closePending || closing) return false
+      if (document.querySelector(FAN_LIVE) === null) return false
+      closePending = true
+      console.debug(`dsh-plus-plus: fan close requested via=${via}`)
+      const trigger = fanTrigger !== null && fanTrigger.isConnected ? fanTrigger : null
+      if (trigger !== null) {
+        trigger.dispatchEvent(escapeEvent('keydown'))
+        trigger.dispatchEvent(escapeEvent('keyup'))
+      }
+      document.dispatchEvent(escapeEvent('keydown'))
+      document.dispatchEvent(escapeEvent('keyup'))
+      console.debug('dsh-plus-plus: fan close escape dispatched')
+      outsideClick(document.body)
+      console.debug('dsh-plus-plus: fan close outside click dispatched')
+      closeTimer = setTimeout(() => {
+        closePending = false
+        if (hideFan()) console.debug('dsh-plus-plus: fan close fallback hide')
+        console.debug('dsh-plus-plus: fan close done')
+      }, 50)
+      return true
+    }
+
     function onTriggerClick(event) {
       const trigger = triggerFromTarget(event.target)
       if (trigger === null) return
-      if (trigger !== fanTrigger) return
-      if (document.querySelector(FAN_LIVE) === null) return
+      if (fanTrigger !== null && fanTrigger.isConnected && trigger !== fanTrigger) return
+      const live = document.querySelector(FAN_LIVE) !== null
+      console.debug('dsh-plus-plus: fan trigger click', triggerState(fanTrigger), `live=${String(live)}`)
+      if (live === false && document.querySelector(FAN_HIDDEN) === null) return
+      if (live && closeFanNow('trigger') === false) return
       event.preventDefault()
       event.stopPropagation()
-      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      if (live) return
+      fanSource = 'button'
+      fanTrigger = trigger
+      revealFan(trigger)
+      shapeFan()
     }
 
     function shapeFan() {
@@ -187,6 +261,7 @@ window.__ModuleLoader__.load({
         missing = false
         return
       }
+      revealFan(trigger)
       let panel = list
       while (
         panel !== null
@@ -270,6 +345,9 @@ window.__ModuleLoader__.load({
           document.removeEventListener('click', onTriggerClick, true)
           clearFan()
           dropGhosts()
+          clearTimeout(closeTimer)
+          closePending = false
+          revealFan(null)
         }
       }, 'dsh-plus-plus: command fan')
     }
