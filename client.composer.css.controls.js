@@ -141,12 +141,6 @@ window.__ModuleLoader__.load({
   box-shadow: 0 4px 12px rgb(0 0 0 / 35%);
 }
 
-[data-pp-fan] [data-pp-fan-item][aria-selected="true"]:not(:hover) {
-  background: var(--dsw-alias-bg-layer-2) !important;
-  color: var(--pp-composer-tool-ink) !important;
-  --pp-fan-ink: var(--pp-composer-tool-ink);
-}
-
 [data-pp-fan] *:not([data-pp-fan-item]):not(:has([data-pp-fan-item])):not([data-pp-fan-item] *) {
   display: none !important;
 }
