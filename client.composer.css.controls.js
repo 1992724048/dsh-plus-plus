@@ -22,10 +22,10 @@ window.__ModuleLoader__.load({
   outline-offset: 2px;
 }
 
-[data-composer-card] button[data-pp-fan-open] {
-  transform: scale(0.96);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+[data-composer-card] button[aria-haspopup="listbox"][data-pp-fan-open],
+[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type[data-pp-fan-open] {
+  background: var(--pp-composer-accent-hover, #ffee22);
+  color: var(--pp-composer-accent-hover-ink, #000);
 }
 
 [data-pp-fan] {
