@@ -52,21 +52,20 @@ window.__ModuleLoader__.load({
 [class*="_frame"]:not([data-sidebar-collapsed]) [class*="_footArea"] {
   flex-direction: row;
   align-items: center;
+  gap: 4px;
 }
 [class*="_frame"]:not([data-sidebar-collapsed]) [class*="_settingsArea"] {
-  width: auto;
+  flex: 1;
 }
 [class*="_frame"]:not([data-sidebar-collapsed]) [class*="_footerActions"] {
   width: auto;
-  margin-left: auto;
   order: 2;
   gap: 6px;
 }
 .pp-settings {
   box-sizing: border-box;
-  width: 26px;
-  height: 26px;
-  margin-left: auto;
+  align-self: stretch;
+  aspect-ratio: 1 / 1;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -81,25 +80,66 @@ window.__ModuleLoader__.load({
 }
 `.trim()
 
+    let opening = false
+
     function SettingsShortcut({ t }) {
       const label = t('nav')
       const open = () => {
-        const trigger = document.querySelector('[class*="_settingsArea"] button[aria-haspopup="dialog"]')
-        trigger?.click()
+        if (opening) return
+        opening = true
+        console.debug('dsh-plus-plus: settings shortcut open')
+        const triggerSelectors = [
+          '[class*="_settingsArea"] button[aria-haspopup="dialog"]',
+          '[class*="_settingsArea"] button',
+          '[class*="_footArea"] button[aria-haspopup="dialog"]',
+          '[class*="_settingsArea"] [role="button"][aria-haspopup="dialog"]',
+        ]
+        const trigger = triggerSelectors
+          .map((selector) => document.querySelector(selector))
+          .find((el) => el !== null)
+        console.debug(`dsh-plus-plus: settings trigger found=${trigger !== undefined}`)
+        if (trigger === undefined) {
+          console.warn('dsh-plus-plus: settings trigger not found')
+          opening = false
+          return
+        }
+        if (document.querySelector('[role="dialog"]') === null) trigger.click()
+        const rankItem = (el) => {
+          if (el.getAttribute('role') === 'dialog' || el.getAttribute('aria-modal') === 'true') return -1
+          const text = (el.textContent ?? '').trim()
+          const id = el.id ?? ''
+          const className = el.getAttribute('class') ?? ''
+          const named = el.getAttribute('aria-label') === label || el.getAttribute('title') === label
+          if (text === label || named || id.includes('dsh-plus-plus')) return 0
+          if (text.includes(label)
+            || className.includes('dsh-plus-plus')
+            || className.includes('plusPlus')
+            || className.includes('pp-')) return 1
+          return -1
+        }
         const pick = (tries) => {
           const own = document.querySelector('.pp-settings')
-          const item = [...document.querySelectorAll('button, [role="tab"], a')].find((el) => (
-            el !== own
-            && el.textContent?.trim() === label
-            && el.closest('[class*="_footArea"]') === null
-          ))
-          if (item !== undefined) {
-            item.click()
+          const candidates = [...document.querySelectorAll('button, [role="tab"], a, [role="option"], [role="menuitem"], [role="button"], li, div')]
+            .filter((el) => el !== own && el.closest('.pp-settings') === null)
+            .map((el) => ({ el, rank: rankItem(el) }))
+            .filter(({ rank }) => rank >= 0)
+            .sort((a, b) => a.rank - b.rank)
+          console.debug(`dsh-plus-plus: settings pick try=${tries} candidates=${candidates.length}`)
+          const hit = candidates[0]
+          if (hit !== undefined) {
+            console.debug(`dsh-plus-plus: settings pick hit tag=${hit.el.tagName} text=${(hit.el.textContent ?? '').trim()}`)
+            hit.el.click()
+            opening = false
             return
           }
-          if (tries > 0) window.setTimeout(() => pick(tries - 1), 120)
+          if (tries > 0) {
+            window.setTimeout(() => pick(tries - 1), 150)
+            return
+          }
+          console.debug('dsh-plus-plus: settings pick gave up')
+          opening = false
         }
-        window.setTimeout(() => pick(6), 240)
+        window.setTimeout(() => pick(12), 300)
       }
       return h('button', {
         type: 'button',
