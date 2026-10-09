@@ -275,14 +275,6 @@ window.__ModuleLoader__.load({
         await feature.apply(ctx)
       }
 
-      ctx.slots.inject('settings.section', () => ctx.slots.register({
-        name: 'settings.section',
-        id: 'dsh-plus-plus',
-        order: 40,
-        label: () => t('nav'),
-        locale: 'settings.plusPlus',
-      }, () => h(SettingsPage, { t, listFeatures })))
-
       const settingsInjected = () => ({ listFeatures })
 
       ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
