@@ -58,14 +58,17 @@ window.__ModuleLoader__.load({
   flex: 1;
 }
 [class*="_frame"]:not([data-sidebar-collapsed]) [class*="_footerActions"] {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
   width: auto;
   order: 2;
   gap: 6px;
 }
 .pp-settings {
-  box-sizing: border-box;
   align-self: stretch;
   aspect-ratio: 1 / 1;
+  box-sizing: border-box;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -87,47 +90,60 @@ window.__ModuleLoader__.load({
       const open = () => {
         if (opening) return
         opening = true
-        console.debug('dsh-plus-plus: settings shortcut open')
+        console.debug('dsh-plus-plus: settings open called')
         const triggerSelectors = [
           '[class*="_settingsArea"] button[aria-haspopup="dialog"]',
-          '[class*="_settingsArea"] button',
           '[class*="_footArea"] button[aria-haspopup="dialog"]',
           '[class*="_settingsArea"] [role="button"][aria-haspopup="dialog"]',
         ]
         const trigger = triggerSelectors
           .map((selector) => document.querySelector(selector))
           .find((el) => el !== null)
-        console.debug(`dsh-plus-plus: settings trigger found=${trigger !== undefined}`)
         if (trigger === undefined) {
           console.warn('dsh-plus-plus: settings trigger not found')
           opening = false
           return
         }
-        if (document.querySelector('[role="dialog"]') === null) trigger.click()
+        const hasPopup = trigger.getAttribute('aria-haspopup')
+        console.debug(`dsh-plus-plus: settings trigger selected tag=${trigger.tagName} aria-haspopup=${hasPopup}`)
+        if (hasPopup !== 'dialog') {
+          console.warn(`dsh-plus-plus: settings trigger rejected aria-haspopup=${hasPopup}`)
+          opening = false
+          return
+        }
+        if (document.querySelector('[role="dialog"]') === null) {
+          trigger.click()
+          console.debug('dsh-plus-plus: settings trigger click dispatched')
+        }
         const rankItem = (el) => {
           if (el.getAttribute('role') === 'dialog' || el.getAttribute('aria-modal') === 'true') return -1
           const text = (el.textContent ?? '').trim()
           const id = el.id ?? ''
           const className = el.getAttribute('class') ?? ''
           const named = el.getAttribute('aria-label') === label || el.getAttribute('title') === label
-          if (text === label || named || id.includes('dsh-plus-plus')) return 0
-          if (text.includes(label)
+          const marked = id.includes('dsh-plus-plus')
+            || id.includes('plusPlus')
+            || id.includes('pp-')
             || className.includes('dsh-plus-plus')
             || className.includes('plusPlus')
-            || className.includes('pp-')) return 1
+            || className.includes('pp-')
+          if (text === label || named || marked) return 0
+          if (text.includes(label)) return 1
           return -1
         }
         const pick = (tries) => {
           const own = document.querySelector('.pp-settings')
-          const candidates = [...document.querySelectorAll('button, [role="tab"], a, [role="option"], [role="menuitem"], [role="button"], li, div')]
-            .filter((el) => el !== own && el.closest('.pp-settings') === null)
+          const candidates = [...document.querySelectorAll('button, a, [role="button"], [role="tab"], [role="option"], [role="menuitem"], [role="menuitemradio"]')]
+            .filter((el) => el !== own
+              && el.closest('.pp-settings') === null
+              && el.closest('input[type="file"], label[for]') === null)
             .map((el) => ({ el, rank: rankItem(el) }))
             .filter(({ rank }) => rank >= 0)
             .sort((a, b) => a.rank - b.rank)
           console.debug(`dsh-plus-plus: settings pick try=${tries} candidates=${candidates.length}`)
           const hit = candidates[0]
           if (hit !== undefined) {
-            console.debug(`dsh-plus-plus: settings pick hit tag=${hit.el.tagName} text=${(hit.el.textContent ?? '').trim()}`)
+            console.debug(`dsh-plus-plus: settings pick hit tag=${hit.el.tagName} text=${(hit.el.textContent ?? '').trim()} aria-label=${hit.el.getAttribute('aria-label') ?? ''} id=${hit.el.id}`)
             hit.el.click()
             opening = false
             return
