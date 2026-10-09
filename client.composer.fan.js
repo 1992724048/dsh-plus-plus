@@ -3,7 +3,10 @@ window.__ModuleLoader__.load({
   factory: () => {
     const module = { exports: {} }
 
-    const FAN_TRIGGER = '[data-composer-card] button[aria-haspopup="listbox"]'
+    const FAN_TRIGGER_PRIMARY = '[data-composer-card] [data-input-scroll] ~ [class*="_row"] > div:first-child > button:first-of-type'
+    const FAN_TRIGGER_FALLBACK = '[data-composer-card] button[aria-haspopup="listbox"]'
+    const FAN_TRIGGER = `${FAN_TRIGGER_PRIMARY}, ${FAN_TRIGGER_FALLBACK}`
+    const FAN_TRIGGER_BLOCKED = '[data-slot="conversation.input.model"], [data-slot="conversation.input.permission"]'
     const FAN_ROW = '[role="option"], [role="menuitem"], [role="menuitemradio"]'
     const FAN_LIVE = '[data-pp-fan]:not([data-pp-fan-ghost])'
     const FAN_ITEM = '[data-pp-fan-item]'
@@ -92,23 +95,49 @@ window.__ModuleLoader__.load({
       closeGhost(rows)
     }
 
+    function isCommandTrigger(button) {
+      return button.closest(FAN_TRIGGER_BLOCKED) === null
+    }
+
+    function triggerFromTarget(target) {
+      if (!(target instanceof Element)) return null
+      for (const selector of [FAN_TRIGGER_PRIMARY, FAN_TRIGGER_FALLBACK]) {
+        const trigger = target.closest(selector)
+        if (trigger !== null && isCommandTrigger(trigger)) return trigger
+      }
+      return null
+    }
+
+    function triggerFromDom() {
+      for (const selector of [FAN_TRIGGER_PRIMARY, FAN_TRIGGER_FALLBACK]) {
+        for (const trigger of document.querySelectorAll(selector)) {
+          if (isCommandTrigger(trigger)) return trigger
+        }
+      }
+      return null
+    }
+
+    function liveTrigger() {
+      return fanTrigger !== null && fanTrigger.isConnected ? fanTrigger : triggerFromDom()
+    }
+
     function trackSourceEvent(event) {
-      const triggers = [...document.querySelectorAll(FAN_TRIGGER)]
-      if (triggers.some((item) => item.getAttribute('aria-expanded') === 'true')) return
       const target = event.target instanceof Element ? event.target : null
-      const trigger = target === null ? null : target.closest(FAN_TRIGGER)
-      if (trigger === null) {
-        fanSource = 'other'
-        fanTrigger = null
+      const trigger = triggerFromTarget(event.target)
+      console.debug('dsh-plus-plus: trackSource', event.type, target === null ? String(event.target) : target.tagName, target === null ? null : target.closest(FAN_TRIGGER_PRIMARY), trigger)
+      if (trigger !== null) {
+        fanSource = 'button'
+        fanTrigger = trigger
         return
       }
-      fanSource = 'button'
-      fanTrigger = trigger
+      const triggers = [...document.querySelectorAll(FAN_TRIGGER)]
+      if (triggers.some((item) => item.getAttribute('aria-expanded') === 'true')) return
+      fanSource = 'other'
+      fanTrigger = null
     }
 
     function onTriggerClick(event) {
-      if (!(event.target instanceof Element)) return
-      const trigger = event.target.closest(FAN_TRIGGER)
+      const trigger = triggerFromTarget(event.target)
       if (trigger === null) return
       if (trigger !== fanTrigger) return
       if (trigger.getAttribute('aria-expanded') !== 'true') return
@@ -132,12 +161,15 @@ window.__ModuleLoader__.load({
         }
         return
       }
-      const trigger = fanTrigger !== null && fanTrigger.isConnected ? fanTrigger : null
+      const trigger = liveTrigger()
+      console.debug('dsh-plus-plus: shapeFan trigger', fanSource, fanTrigger === null ? 'none' : String(fanTrigger.className), trigger === null ? 'none' : String(trigger.className), trigger === null ? '' : trigger.getAttribute('aria-expanded'))
       if (trigger === null) {
         miss('dsh-plus-plus: command fan trigger not found')
         return
       }
-      if (fanSource !== 'button' || trigger.getAttribute('aria-expanded') !== 'true') {
+      const expanded = trigger.getAttribute('aria-expanded')
+      console.debug('dsh-plus-plus: shapeFan gate', fanSource, expanded === null ? 'absent' : expanded)
+      if (fanSource !== 'button' || (expanded !== null && expanded !== 'true')) {
         clearFan()
         missing = false
         return
