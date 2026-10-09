@@ -13,6 +13,7 @@ window.__ModuleLoader__.load({
     let missing = false
     let queued = false
     let fanSource = 'other'
+    let fanTrigger = null
     let fanArmed = false
     let closing = false
 
@@ -92,16 +93,24 @@ window.__ModuleLoader__.load({
     }
 
     function trackSourceEvent(event) {
-      const trigger = document.querySelector(FAN_TRIGGER)
-      if (trigger === null) return
-      if (trigger.getAttribute('aria-expanded') === 'true') return
-      fanSource = trigger.contains(event.target) ? 'button' : 'other'
+      const triggers = [...document.querySelectorAll(FAN_TRIGGER)]
+      if (triggers.some((item) => item.getAttribute('aria-expanded') === 'true')) return
+      const target = event.target instanceof Element ? event.target : null
+      const trigger = target === null ? null : target.closest(FAN_TRIGGER)
+      if (trigger === null) {
+        fanSource = 'other'
+        fanTrigger = null
+        return
+      }
+      fanSource = 'button'
+      fanTrigger = trigger
     }
 
     function onTriggerClick(event) {
       if (!(event.target instanceof Element)) return
       const trigger = event.target.closest(FAN_TRIGGER)
       if (trigger === null) return
+      if (trigger !== fanTrigger) return
       if (trigger.getAttribute('aria-expanded') !== 'true') return
       if (document.querySelector(FAN_LIVE) === null) return
       event.preventDefault()
@@ -123,7 +132,7 @@ window.__ModuleLoader__.load({
         }
         return
       }
-      const trigger = document.querySelector(FAN_TRIGGER)
+      const trigger = fanTrigger !== null && fanTrigger.isConnected ? fanTrigger : null
       if (trigger === null) {
         miss('dsh-plus-plus: command fan trigger not found')
         return
