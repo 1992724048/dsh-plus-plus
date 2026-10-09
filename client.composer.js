@@ -28,21 +28,21 @@ window.__ModuleLoader__.load({
 
     const DICT = {
       zh: {
-        'composer.title': '输入框',
-        'composer.subtitle': '编辑区、工具行、各个按钮各自独立成块。两个主题下编辑区均为半透明白色毛玻璃、按钮白色；墨色与描边随主题反转。',
-        'composer.attach': '添加文件',
+        'title': '输入框',
+        'subtitle': '编辑区、工具行、各个按钮各自独立成块。两个主题下编辑区均为半透明白色毛玻璃、按钮白色；墨色与描边随主题反转。',
+        'attach': '添加文件',
       },
       en: {
-        'composer.title': 'Composer',
-        'composer.subtitle': 'The editor, the tool row and every control are their own blocks. Both schemes: a translucent white blurred editor and white buttons; ink and hairlines follow the theme.',
-        'composer.attach': 'Add files',
+        'title': 'Composer',
+        'subtitle': 'The editor, the tool row and every control are their own blocks. Both schemes: a translucent white blurred editor and white buttons; ink and hairlines follow the theme.',
+        'attach': 'Add files',
       },
     }
 
     function Settings({ t }) {
       return h('div', { className: 'pp-section' }, [
-        h('h2', { className: 'pp-title' }, t('composer.title')),
-        h('p', { className: 'pp-sub' }, t('composer.subtitle')),
+        h('h2', { className: 'pp-title' }, t('title')),
+        h('p', { className: 'pp-sub' }, t('subtitle')),
       ])
     }
 
