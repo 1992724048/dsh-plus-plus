@@ -119,6 +119,18 @@ window.__ModuleLoader__.load({
   display: none !important;
 }
 
+[data-pp-fan] [data-pp-fan-item]:not(:hover):focus,
+[data-pp-fan] [data-pp-fan-item]:not(:hover):active {
+  background: var(--pp-composer-tool) !important;
+  color: var(--pp-composer-tool-ink) !important;
+  --pp-fan-ink: var(--pp-composer-tool-ink);
+}
+
+[data-pp-fan] [data-pp-fan-item]:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #2563EB));
+  outline-offset: 2px;
+}
+
 [data-pp-fan] [data-pp-fan-item]:hover {
   z-index: 5;
   background: var(--pp-composer-accent-hover, #ffee22) !important;
@@ -129,8 +141,7 @@ window.__ModuleLoader__.load({
   box-shadow: 0 4px 12px rgb(0 0 0 / 35%);
 }
 
-[data-pp-fan] [data-pp-fan-item][aria-selected="true"]:not(:hover),
-[data-pp-fan] [data-pp-fan-item][class*="rowActive"]:not(:hover) {
+[data-pp-fan] [data-pp-fan-item][aria-selected="true"]:not(:hover) {
   background: var(--dsw-alias-bg-layer-2) !important;
   color: var(--pp-composer-tool-ink) !important;
   --pp-fan-ink: var(--pp-composer-tool-ink);
