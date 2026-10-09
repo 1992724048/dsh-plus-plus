@@ -5,8 +5,8 @@ window.__ModuleLoader__.load({
     const exports = module.exports
 
     const React = require('react')
-    const { createElement: h } = React
-    const { IconSettingsOutlineMedium } = require('@deepseek-ai/dsh-client-ui-primitives')
+    const { createElement: h, useCallback, useEffect, useRef, useState } = React
+    const { IconSettingsOutlineMedium, Modal } = require('@deepseek-ai/dsh-client-ui-primitives')
 
     const CHUNKS = [
       './client.core.js',
@@ -66,10 +66,9 @@ window.__ModuleLoader__.load({
   gap: 6px;
 }
 .pp-settings {
-  height: 100%;
-  aspect-ratio: 1 / 1;
   box-sizing: border-box;
   padding: 0;
+  margin: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -77,130 +76,142 @@ window.__ModuleLoader__.load({
   display: grid;
   place-items: center;
   cursor: pointer;
+  align-self: center;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
 }
 .pp-settings:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
+.pp-modal-body {
+  max-width: min(560px, calc(100vw - 48px));
+  max-height: min(68vh, 640px);
+  overflow-y: auto;
+  outline: none;
+}
 `.trim()
 
-    let opening = false
-
-    const VALID_POPUPS = ['menu', 'dialog', 'listbox']
-    const TRIGGER_SELECTORS = [
-      '[class*="_settingsArea"] button[aria-haspopup="menu"]',
-      '[class*="_settingsArea"] button[aria-haspopup="dialog"]',
-      '[class*="_settingsArea"] button[aria-haspopup]',
-      '[class*="_settingsArea"] button',
+    const USER_INFO_SELECTORS = [
+      '[class*="_settingsArea"] [class*="triggerRow"]',
+      '[class*="_settingsArea"] button:not(.pp-settings)',
     ]
-    const CANDIDATE_SELECTOR = 'button, a, [role="button"], [role="tab"], [role="option"], [role="menuitem"], [role="menuitemradio"]'
 
-    const findTrigger = () => {
-      for (const selector of TRIGGER_SELECTORS) {
-        for (const el of document.querySelectorAll(selector)) {
-          if (el.closest('.pp-settings') !== null) continue
-          const popup = el.getAttribute('aria-haspopup')
-          if (VALID_POPUPS.includes(popup)) return el
-          console.warn(`dsh-plus-plus: settings trigger rejected aria-haspopup=${popup}`)
-        }
+    const findUserInfo = () => {
+      for (const selector of USER_INFO_SELECTORS) {
+        const el = document.querySelector(selector)
+        if (el !== null) return el
       }
       return null
     }
 
-    const isBlockedItem = (el) => el.closest('.pp-settings') !== null
-      || el.closest('.pp-page') !== null
-      || el.closest('input[type="file"], label[for]') !== null
-      || el.getAttribute('role') === 'dialog'
-      || el.getAttribute('aria-modal') === 'true'
-
-    const matchSettingsText = (value) => {
-      const text = (value ?? '').trim()
-      return text === 'Settings'
-        || text === '设置'
-        || text.startsWith('Settings…')
-        || text.startsWith('设置…')
-    }
-
-    const rankPlusPlus = (label, el) => {
-      const text = (el.textContent ?? '').trim()
-      const id = el.id ?? ''
-      const className = el.getAttribute('class') ?? ''
-      const named = el.getAttribute('aria-label') === label || el.getAttribute('title') === label
-      const marked = id.includes('dsh-plus-plus')
-        || id.includes('plusPlus')
-        || id.includes('pp-')
-        || className.includes('dsh-plus-plus')
-        || className.includes('plusPlus')
-        || className.includes('pp-')
-      if (text === label || named || marked) return 0
-      if (text.includes(label)) return 1
-      return -1
-    }
-
-    const rankSettingsItem = (el) => {
-      const id = (el.id ?? '').toLowerCase()
-      const className = (el.getAttribute('class') ?? '').toLowerCase()
-      const named = matchSettingsText(el.getAttribute('aria-label')) || matchSettingsText(el.getAttribute('title'))
-      const marked = id.includes('setting') || className.includes('setting')
-      if (matchSettingsText(el.textContent) || named || marked) return 0
-      return -1
-    }
-
-    function SettingsShortcut({ t }) {
+    function SettingsShortcut({ t, listFeatures }) {
       const label = t('nav')
-      const open = () => {
-        if (opening) return
-        opening = true
-        console.debug('dsh-plus-plus: settings open called')
-        const trigger = findTrigger()
-        if (trigger === null) {
-          console.warn('dsh-plus-plus: settings trigger not found')
-          opening = false
-          return
+      const [open, setOpen] = useState(false)
+      const triggerRef = useRef(null)
+      const bodyRef = useRef(null)
+
+      const closeModal = useCallback(() => {
+        setOpen(false)
+      }, [])
+
+      useEffect(() => {
+        if (!open) return undefined
+        bodyRef.current?.focus()
+        const onKeyDown = (event) => {
+          if (event.key === 'Escape') closeModal()
         }
-        console.debug(`dsh-plus-plus: settings trigger selected tag=${trigger.tagName} aria-haspopup=${trigger.getAttribute('aria-haspopup')}`)
-        trigger.click()
-        console.debug('dsh-plus-plus: settings trigger click dispatched')
-        let settingsClicked = false
-        const pick = (tries) => {
-          const candidates = [...document.querySelectorAll(CANDIDATE_SELECTOR)]
-            .filter((el) => el !== trigger && !isBlockedItem(el))
-          const rankTop = (ranker) => candidates
-            .map((el) => ({ el, rank: ranker(el) }))
-            .filter(({ rank }) => rank >= 0)
-            .sort((a, b) => a.rank - b.rank)
-          const plusPlus = rankTop((el) => rankPlusPlus(label, el))
-          console.debug(`dsh-plus-plus: settings pick try=${tries} candidates=${plusPlus.length}`)
-          const hit = plusPlus[0]
-          if (hit !== undefined) {
-            console.debug(`dsh-plus-plus: settings pick hit tag=${hit.el.tagName} text=${(hit.el.textContent ?? '').trim()} aria-label=${hit.el.getAttribute('aria-label') ?? ''} id=${hit.el.id}`)
-            hit.el.click()
-            opening = false
-            return
-          }
-          if (!settingsClicked) {
-            const settings = rankTop(rankSettingsItem)[0]
-            if (settings !== undefined) {
-              console.debug(`dsh-plus-plus: settings click settings item tag=${settings.el.tagName} text=${(settings.el.textContent ?? '').trim()}`)
-              settings.el.click()
-              settingsClicked = true
-            }
-          }
-          if (tries > 0) {
-            window.setTimeout(() => pick(tries - 1), 150)
-            return
-          }
-          console.warn('dsh-plus-plus: settings pick gave up')
-          opening = false
+        document.addEventListener('keydown', onKeyDown)
+        return () => {
+          document.removeEventListener('keydown', onKeyDown)
+          triggerRef.current?.focus()
         }
-        window.setTimeout(() => pick(16), 300)
+      }, [open, closeModal])
+
+      useEffect(() => {
+        let frame = 0
+        let measuredTrigger = null
+        let measuredUser = null
+
+        const applySize = () => {
+          const trigger = triggerRef.current
+          const userInfo = findUserInfo()
+          if (trigger === null || trigger === undefined || userInfo === null) return
+          if (userInfo !== measuredUser) {
+            measuredUser = userInfo
+            resizeObserver.disconnect()
+            resizeObserver.observe(userInfo)
+          }
+          measuredTrigger = trigger
+          const size = userInfo.getBoundingClientRect().height
+          if (!(size > 0)) return
+          const next = `${size}px`
+          if (trigger.style.height === next) return
+          trigger.style.width = next
+          trigger.style.height = next
+        }
+
+        const schedule = () => {
+          if (frame !== 0) return
+          frame = window.requestAnimationFrame(() => {
+            frame = 0
+            applySize()
+          })
+        }
+
+        const resizeObserver = new ResizeObserver(schedule)
+        const mutationObserver = new MutationObserver(() => {
+          const intact = measuredUser !== null && measuredUser.isConnected
+            && measuredTrigger !== null
+            && measuredTrigger === triggerRef.current
+            && measuredTrigger.isConnected
+          if (intact) return
+          schedule()
+        })
+
+        applySize()
+        mutationObserver.observe(document.body, { childList: true, subtree: true })
+
+        return () => {
+          if (frame !== 0) window.cancelAnimationFrame(frame)
+          resizeObserver.disconnect()
+          mutationObserver.disconnect()
+        }
+      }, [])
+
+      const openModal = (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        console.debug('dsh-plus-plus: settings modal open')
+        setOpen(true)
       }
-      return h('button', {
-        type: 'button',
-        className: 'pp-settings',
-        'aria-label': label,
-        title: label,
-        onClick: open,
-      }, h(IconSettingsOutlineMedium, { size: 16 }))
+
+      return h(React.Fragment, null, [
+        h('button', {
+          key: 'trigger',
+          ref: triggerRef,
+          type: 'button',
+          className: 'pp-settings',
+          'aria-label': label,
+          'aria-haspopup': 'dialog',
+          'aria-expanded': open,
+          title: label,
+          onClick: openModal,
+        }, h(IconSettingsOutlineMedium, { size: 16 })),
+        open && h(Modal, {
+          key: 'modal',
+          open: true,
+          onClose: closeModal,
+          title: t('modal.title'),
+          closeLabel: t('modal.close'),
+        }, h('div', {
+          ref: bodyRef,
+          className: 'pp-modal-body',
+          tabIndex: -1,
+        }, h(SettingsPage, { t, listFeatures }))),
+      ])
     }
 
     function SettingsPage({ t, listFeatures }) {
@@ -233,10 +244,14 @@ window.__ModuleLoader__.load({
         zh: {
           'nav': 'Plus Plus',
           'meta.subtitle': '{n} 组增强已启用',
+          'modal.title': 'Plus Plus 设置',
+          'modal.close': '关闭',
         },
         en: {
           'nav': 'Plus Plus',
           'meta.subtitle': '{n} enhancements enabled',
+          'modal.title': 'Plus Plus Settings',
+          'modal.close': 'Close',
         },
       })
 
@@ -268,11 +283,14 @@ window.__ModuleLoader__.load({
         locale: 'settings.plusPlus',
       }, () => h(SettingsPage, { t, listFeatures })))
 
+      const settingsInjected = () => ({ listFeatures })
+
       ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
         name: 'sidebar.footer.action',
         id: 'dsh-plus-plus',
         order: 10,
         locale: 'settings.plusPlus',
+        inject: settingsInjected,
       }, SettingsShortcut))
     }
 
